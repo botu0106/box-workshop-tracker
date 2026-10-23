@@ -10,9 +10,11 @@
 <form method="post" class="row g-3">
 
   <div class="col-12 col-md-6">
-    <label class="form-label">Order code</label>
+    <label class="form-label">Order number</label>
     <input name="order_code" class="form-control" maxlength="30" required
+           placeholder="e.g. 115"
            value="{{ form.get('order_code', '') }}">
+    <div class="form-text">Use the workshop's own order number. Do not enter client names.</div>
     {{ err('order_code') }}
   </div>
 
@@ -32,8 +34,14 @@
 
   <div class="col-12 col-md-6">
     <label class="form-label">Quantity (boxes)</label>
-    <input name="quantity" type="number" min="1" class="form-control" required
+    <input name="quantity" id="quantity" type="text" inputmode="numeric" pattern="[0-9]*"
+           class="form-control" required
            value="{{ form.get('quantity', '') }}">
+    <div class="d-flex gap-2 mt-2">
+      <button type="button" class="btn btn-sm btn-outline-secondary qty-preset" data-qty="1000">1000</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary qty-preset" data-qty="1500">1500</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary qty-preset" data-qty="2000">2000</button>
+    </div>
     {{ err('quantity') }}
   </div>
 
@@ -77,4 +85,17 @@
     <button class="btn btn-primary">Save order</button>
   </div>
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Quick quantity buttons: fill the field with a common order size
+  const quantityInput = document.getElementById("quantity");
+  document.querySelectorAll(".qty-preset").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      quantityInput.value = btn.dataset.qty;
+      quantityInput.focus();
+    });
+  });
+</script>
 {% endblock %}
