@@ -42,7 +42,7 @@
   </div>
 
   <div class="col-12 col-md-6">
-    <label class="form-label">Machine (optional)</label>
+    <label class="form-label">Machine</label>
     <select name="machine_id" class="form-select">
       <option value="">—</option>
       {% for m in machines %}
@@ -52,6 +52,7 @@
         </option>
       {% endfor %}
     </select>
+    <div class="form-text" id="machine-hint"></div>
     {{ err('machine_id') }}
   </div>
 
@@ -114,4 +115,49 @@
   </div>
 </form>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Show only the machines that can perform the selected stage,
+  // and select the machine automatically when only one fits.
+  const stageMachines = {{ stage_machines|tojson }};
+  const stageSelect = document.querySelector('select[name="stage_id"]');
+  const machineSelect = document.querySelector('select[name="machine_id"]');
+  const machineHint = document.getElementById("machine-hint");
+
+  function updateMachines() {
+    if (!stageSelect || !machineSelect) return;
+    const allowed = stageMachines[stageSelect.value] || [];
+
+    for (const opt of machineSelect.options) {
+      if (opt.value === "") continue;
+      const ok = allowed.includes(Number(opt.value));
+      opt.hidden = !ok;
+      opt.disabled = !ok;
+      if (!ok && opt.selected) machineSelect.value = "";
+    }
+
+    if (!stageSelect.value) {
+      machineSelect.disabled = true;
+      machineHint.textContent = "Choose a stage first.";
+    } else if (allowed.length === 0) {
+      machineSelect.value = "";
+      machineSelect.disabled = true;
+      machineHint.textContent = "This stage does not use a machine.";
+    } else if (allowed.length === 1) {
+      machineSelect.disabled = false;
+      machineSelect.value = String(allowed[0]);
+      machineHint.textContent = "Selected automatically (only one machine for this stage).";
+    } else {
+      machineSelect.disabled = false;
+      machineHint.textContent = "Choose one of the machines for this stage.";
+    }
+  }
+
+  if (stageSelect) {
+    stageSelect.addEventListener("change", updateMachines);
+    updateMachines();
+  }
+</script>
 {% endblock %}

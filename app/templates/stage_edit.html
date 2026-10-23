@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Edit stage{% endblock %}
+
+{% macro err(name) %}
+  {% if errors.get(name) %}<div class="text-danger small">{{ errors[name] }}</div>{% endif %}
+{% endmacro %}
+
+{% block content %}
+<h1 class="h3 mb-1">Edit stage: {{ stage.stage_name }}</h1>
+<p class="text-muted mb-3">
+  Order {{ stage.order_code }} · originally entered by {{ stage.entered_by }}
+  at {{ stage.created_at.strftime('%Y-%m-%d %H:%M') }}
+</p>
+
+<form method="post" class="row g-3">
+
+  <div class="col-12 col-md-6">
+    <label class="form-label">Machine</label>
+    {% if machines_for_stage %}
+      <select name="machine_id" class="form-select">
+        <option value="">—</option>
+        {% for m in machines_for_stage %}
+          <option value="{{ m.machine_id }}"
+            {% if form.get('machine_id') == m.machine_id|string %}selected{% endif %}>
+            {{ m.code }} – {{ m.machine_type }}
+          </option>
+        {% endfor %}
+      </select>
+    {% else %}
+      <input type="hidden" name="machine_id" value="">
+      <div class="form-text">This stage does not use a machine.</div>
+    {% endif %}
+    {{ err('machine_id') }}
+  </div>
+
+  <div class="col-12 col-md-6">
+    <label class="form-label">Operators</label>
+    <select name="operators" class="form-select">
+      <option value="">—</option>
+      <option value="1" {% if form.get('operators') == '1' %}selected{% endif %}>1</option>
+      <option value="2" {% if form.get('operators') == '2' %}selected{% endif %}>2</option>
+    </select>
+    {{ err('operators') }}
+  </div>
+
+  <div class="col-12 col-md-6">
+    <label class="form-label">Started at</label>
+    <input name="started_at" type="datetime-local" class="form-control" required
+           value="{{ form.get('started_at', '') }}">
+    {{ err('started_at') }}
+  </div>
+
+  <div class="col-12 col-md-6">
+    <label class="form-label">Finished at</label>
+    <input name="finished_at" type="datetime-local" class="form-control"
+           value="{{ form.get('finished_at', '') }}">
+    {{ err('finished_at') }}
+  </div>
+
+  <div class="col-6 col-md-3">
+    <label class="form-label">Boxes completed</label>
+    <input name="boxes_completed" type="number" min="0" class="form-control"
+           value="{{ form.get('boxes_completed', '') }}">
+    {{ err('boxes_completed') }}
+  </div>
+
+  <div class="col-6 col-md-3">
+    <label class="form-label">Defective boxes</label>
+    <input name="boxes_defective" type="number" min="0" class="form-control"
+           value="{{ form.get('boxes_defective', '') }}">
+    {{ err('boxes_defective') }}
+  </div>
+
+  <div class="col-12 col-md-6">
+    <label class="form-label">Entry mode</label>
+    <select name="entry_mode" class="form-select">
+      <option value="realtime" {% if form.get('entry_mode') != 'end_of_day' %}selected{% endif %}>Recorded as it happened</option>
+      <option value="end_of_day" {% if form.get('entry_mode') == 'end_of_day' %}selected{% endif %}>Entered later (end of day)</option>
+    </select>
+    {{ err('entry_mode') }}
+  </div>
+
+  <div class="col-12 col-md-6">
+    <label class="form-label">Edited by</label>
+    <input name="entered_by" class="form-control" required
+           value="{{ form.get('entered_by', 'manager') }}">
+    {{ err('entered_by') }}
+  </div>
+
+  <div class="col-12 d-flex gap-2">
+    <button class="btn btn-primary">Save changes</button>
+    <a class="btn btn-outline-secondary" href="{{ url_for('main.order_detail', order_id=stage.order_id) }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

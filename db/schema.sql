@@ -18,6 +18,13 @@ CREATE TABLE machines (
     active       BOOLEAN NOT NULL DEFAULT TRUE
 );
 
+-- Which machines can perform which stage
+CREATE TABLE stage_machines (
+    stage_id   INT NOT NULL REFERENCES stages(stage_id),
+    machine_id INT NOT NULL REFERENCES machines(machine_id),
+    PRIMARY KEY (stage_id, machine_id)
+);
+
 -- Orders
 CREATE TABLE orders (
     order_id               SERIAL PRIMARY KEY,
@@ -51,11 +58,14 @@ CREATE TABLE stage_events (
     entered_by      TEXT NOT NULL,
     source          TEXT NOT NULL DEFAULT 'web_form',
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_by      TEXT,
+    updated_at      TIMESTAMPTZ,
     CHECK (finished_at IS NULL OR finished_at > started_at),
     CHECK (boxes_defective IS NULL OR boxes_completed IS NULL
-           OR boxes_defective <= boxes_completed)
+           OR boxes_defective <= boxes_completed),
+    FOREIGN KEY (stage_id, machine_id) REFERENCES stage_machines(stage_id, machine_id)
 );
 
 CREATE INDEX idx_stage_events_order   ON stage_events(order_id);
 CREATE INDEX idx_stage_events_started ON stage_events(started_at);
-   CREATE UNIQUE INDEX uq_orders_code_ci ON orders (UPPER(order_code));
+CREATE UNIQUE INDEX uq_orders_code_ci ON orders (UPPER(order_code));

@@ -7,25 +7,29 @@
   <table class="table table-sm table-striped align-middle">
     <thead>
       <tr>
-        <th>ID</th><th>Code</th><th>Box type</th><th>Qty</th>
-        <th>Received</th><th>Promised</th><th>Material</th>
-        <th>Open orders at receipt</th><th>Entered by</th><th>Source</th><th>Entered at</th>
+        <th>Code</th><th>Box type</th><th>Qty</th><th>Received</th>
+        <th>Promised</th><th>Status</th><th>Stages</th><th>Last stage</th>
       </tr>
     </thead>
     <tbody>
       {% for o in orders %}
       <tr>
-        <td>{{ o.order_id }}</td>
         <td><a href="{{ url_for('main.order_detail', order_id=o.order_id) }}">{{ o.order_code }}</a></td>
         <td>{{ o.box_type }}</td>
         <td>{{ o.quantity }}</td>
         <td>{{ o.received_at.strftime('%Y-%m-%d %H:%M') }}</td>
         <td>{{ o.promised_date or '—' }}</td>
-        <td>{{ 'In stock' if o.material_in_stock else 'Not in stock' }}</td>
-        <td>{{ o.open_orders_at_receipt }}</td>
-        <td>{{ o.entered_by }}</td>
-        <td>{{ o.source }}</td>
-        <td>{{ o.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>
+          {% if o.completed_at %}
+            <span class="badge bg-success">Completed</span>
+          {% elif o.stage_count > 0 %}
+            <span class="badge bg-primary">In progress</span>
+          {% else %}
+            <span class="badge bg-secondary">Waiting</span>
+          {% endif %}
+        </td>
+        <td>{{ o.stage_count }}</td>
+        <td>{{ o.last_stage or '—' }}</td>
       </tr>
       {% endfor %}
     </tbody>

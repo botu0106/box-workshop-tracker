@@ -10,6 +10,24 @@ def _parse_int(value):
         return None
 
 
+def _parse_datetime(value):
+    try:
+        return datetime.fromisoformat(value or "")
+    except ValueError:
+        return None
+
+
+def _parse_optional_count(form, field, label, errors):
+    raw = form.get(field) or ""
+    if raw == "":
+        return None
+    value = _parse_int(raw)
+    if value is None or value < 0:
+        errors[field] = f"{label} must be a whole number of 0 or more."
+        return None
+    return value
+
+
 def validate_order(form, valid_box_type_ids, now=None):
     """Check order form input. Returns (clean_data, errors)."""
     now = now or datetime.now()
@@ -35,12 +53,10 @@ def validate_order(form, valid_box_type_ids, now=None):
         errors["quantity"] = f"Quantity must not exceed {MAX_QUANTITY:,}."
     data["quantity"] = quantity
 
-    received_at = None
-    try:
-        received_at = datetime.fromisoformat(form.get("received_at") or "")
-    except ValueError:
+    received_at = _parse_datetime(form.get("received_at"))
+    if received_at is None:
         errors["received_at"] = "Enter a valid date and time."
-    if received_at and received_at > now + timedelta(minutes=5):
+    elif received_at > now + timedelta(minutes=5):
         errors["received_at"] = "Received time cannot be in the future."
     data["received_at"] = received_at
 
@@ -66,28 +82,14 @@ def validate_order(form, valid_box_type_ids, now=None):
     data["entered_by"] = entered_by
 
     return data, errors
-def _parse_datetime(value):
-    try:
-        return datetime.fromisoformat(value or "")
-    except ValueError:
-        return None
 
 
-def _parse_optional_count(form, field, label, errors):
-    raw = form.get(field) or ""
-    if raw == "":
-        return None
-    value = _parse_int(raw)
-    if value is None or value < 0:
-        errors[field] = f"{label} must be a whole number of 0 or more."
-        return None
-    return value
-
-
-def validate_stage_event(form, orders, valid_stage_ids, valid_machine_ids, now=None):
+def validate_stage_event(form, orders, valid_stage_ids, valid_machine_ids,
+                         allowed_pairs=None, now=None):
     """Check stage event input.
 
     orders: dict {order_id: received_at} for orders that are still open.
+    allowed_pairs: set of (stage_id, machine_id) that are permitted.
     Returns (clean_data, errors).
     """
     now = now or datetime.now()
@@ -109,6 +111,8 @@ def validate_stage_event(form, orders, valid_stage_ids, valid_machine_ids, now=N
         machine_id = _parse_int(form.get("machine_id"))
         if machine_id not in valid_machine_ids:
             errors["machine_id"] = "Choose a valid machine."
+        elif allowed_pairs is not None and (stage_id, machine_id) not in allowed_pairs:
+            errors["machine_id"] = "This machine cannot be used for the selected stage."
     data["machine_id"] = machine_id
 
     started_at = _parse_datetime(form.get("started_at"))
