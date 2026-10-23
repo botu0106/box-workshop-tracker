@@ -10,7 +10,10 @@
   <nav class="navbar navbar-dark bg-dark mb-4">
     <div class="container">
       <a class="navbar-brand" href="{{ url_for('main.list_orders') }}">Workshop Tracker</a>
-      <a class="btn btn-outline-light btn-sm" href="{{ url_for('main.new_order') }}">+ New order</a>
+            <div>
+        <a class="btn btn-outline-light btn-sm" href="{{ url_for('main.new_order') }}">+ Order</a>
+        <a class="btn btn-outline-light btn-sm" href="{{ url_for('main.new_stage_event') }}">+ Stage</a>
+      </div>
     </div>
   </nav>
   <main class="container">

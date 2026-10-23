@@ -1,8 +1,10 @@
+from datetime import datetime
+
 import psycopg2
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
 
 from .db import get_db
-from .validation import validate_order
+from .validation import validate_order, validate_stage_event
 
 bp = Blueprint("main", __name__)
 
@@ -79,3 +81,110 @@ def list_orders():
         """
     )
     return render_template("orders.html", orders=cur.fetchall())
+
+def get_open_orders():
+    cur = get_db().cursor()
+    cur.execute(
+        "SELECT order_id, order_code, received_at FROM orders "
+        "WHERE completed_at IS NULL ORDER BY received_at DESC;"
+    )
+    return cur.fetchall()
+
+
+def get_stages():
+    cur = get_db().cursor()
+    cur.execute("SELECT stage_id, code, name FROM stages ORDER BY stage_id;")
+    return cur.fetchall()
+
+
+def get_machines():
+    cur = get_db().cursor()
+    cur.execute(
+        "SELECT machine_id, code, machine_type FROM machines WHERE active ORDER BY code;"
+    )
+    return cur.fetchall()
+
+
+@bp.route("/stages/new", methods=["GET", "POST"])
+def new_stage_event():
+    orders = get_open_orders()
+    stages = get_stages()
+    machines = get_machines()
+    errors = {}
+    form = request.args  # allows ?order_id=5 to pre-select an order
+    now_str = datetime.now().strftime("%Y-%m-%dT%H:%M")
+
+    if request.method == "POST":
+        form = request.form
+        # DB returns timezone-aware times; drop tzinfo to compare with form input
+        order_map = {o["order_id"]: o["received_at"].replace(tzinfo=None) for o in orders}
+        data, errors = validate_stage_event(
+            form,
+            order_map,
+            {s["stage_id"] for s in stages},
+            {m["machine_id"] for m in machines},
+        )
+
+        if not errors:
+            conn = get_db()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO stage_events (
+                            order_id, stage_id, machine_id, started_at, finished_at,
+                            operators, boxes_completed, boxes_defective,
+                            entry_mode, entered_by, source
+                        )
+                        VALUES (
+                            %(order_id)s, %(stage_id)s, %(machine_id)s,
+                            %(started_at)s, %(finished_at)s, %(operators)s,
+                            %(boxes_completed)s, %(boxes_defective)s,
+                            %(entry_mode)s, %(entered_by)s, 'web_form'
+                        )
+                        RETURNING stage_event_id;
+                        """,
+                        data,
+                    )
+                    new_id = cur.fetchone()["stage_event_id"]
+                conn.commit()
+                flash(f"Stage saved (ID {new_id}).", "success")
+                return redirect(url_for("main.order_detail", order_id=data["order_id"]))
+            except psycopg2.IntegrityError:
+                conn.rollback()
+                flash("The database rejected this record. Please check the values.", "danger")
+
+    return render_template(
+        "stage_form.html",
+        orders=orders, stages=stages, machines=machines,
+        errors=errors, form=form, now_str=now_str,
+    )
+
+
+@bp.route("/orders/<int:order_id>")
+def order_detail(order_id):
+    cur = get_db().cursor()
+    cur.execute(
+        """
+        SELECT o.*, b.name AS box_type
+        FROM orders o JOIN box_types b USING (box_type_id)
+        WHERE o.order_id = %s;
+        """,
+        (order_id,),
+    )
+    order = cur.fetchone()
+    if order is None:
+        abort(404)
+
+    cur.execute(
+        """
+        SELECT se.*, s.name AS stage_name, m.code AS machine_code
+        FROM stage_events se
+        JOIN stages s USING (stage_id)
+        LEFT JOIN machines m USING (machine_id)
+        WHERE se.order_id = %s
+        ORDER BY se.started_at;
+        """,
+        (order_id,),
+    )
+    return render_template("order_detail.html", order=order, stages=cur.fetchall())

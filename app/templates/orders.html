@@ -16,7 +16,7 @@
       {% for o in orders %}
       <tr>
         <td>{{ o.order_id }}</td>
-        <td>{{ o.order_code }}</td>
+        <td><a href="{{ url_for('main.order_detail', order_id=o.order_id) }}">{{ o.order_code }}</a></td>
         <td>{{ o.box_type }}</td>
         <td>{{ o.quantity }}</td>
         <td>{{ o.received_at.strftime('%Y-%m-%d %H:%M') }}</td>
