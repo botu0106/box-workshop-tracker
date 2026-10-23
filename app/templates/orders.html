@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Orders{% endblock %}
+{% block content %}
+<h1 class="h3 mb-3">Orders</h1>
+{% if orders %}
+<div class="table-responsive">
+  <table class="table table-sm table-striped align-middle">
+    <thead>
+      <tr>
+        <th>ID</th><th>Code</th><th>Box type</th><th>Qty</th>
+        <th>Received</th><th>Promised</th><th>Material</th>
+        <th>Open orders at receipt</th><th>Entered by</th><th>Source</th><th>Entered at</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for o in orders %}
+      <tr>
+        <td>{{ o.order_id }}</td>
+        <td>{{ o.order_code }}</td>
+        <td>{{ o.box_type }}</td>
+        <td>{{ o.quantity }}</td>
+        <td>{{ o.received_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>{{ o.promised_date or '—' }}</td>
+        <td>{{ 'In stock' if o.material_in_stock else 'Not in stock' }}</td>
+        <td>{{ o.open_orders_at_receipt }}</td>
+        <td>{{ o.entered_by }}</td>
+        <td>{{ o.source }}</td>
+        <td>{{ o.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-muted">No orders yet.</p>
+{% endif %}
+{% endblock %}

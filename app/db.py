@@ -8,6 +8,7 @@ def get_db():
         g.db = psycopg2.connect(
             **current_app.config["DB"],
             cursor_factory=psycopg2.extras.RealDictCursor,
+            options="-c timezone=Asia/Tashkent",
         )
     return g.db
 

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}New order{% endblock %}
+
+{% macro err(name) %}
+  {% if errors.get(name) %}<div class="text-danger small">{{ errors[name] }}</div>{% endif %}
+{% endmacro %}
+
+{% block content %}
+<h1 class="h3 mb-3">New order</h1>
+<form method="post" class="row g-3">
+
+  <div class="col-12 col-md-6">
+    <label class="form-label">Order code</label>
+    <input name="order_code" class="form-control" maxlength="30" required
+           value="{{ form.get('order_code', '') }}">
+    {{ err('order_code') }}
+  </div>
+
+  <div class="col-12 col-md-6">
+    <label class="form-label">Box type</label>
+    <select name="box_type_id" class="form-select" required>
+      <option value="">Choose...</option>
+      {% for b in box_types %}
+        <option value="{{ b.box_type_id }}"
+          {% if form.get('box_type_id') == b.box_type_id|string %}selected{% endif %}>
+          {{ b.name }}
+        </option>
+      {% endfor %}
+    </select>
+    {{ err('box_type_id') }}
+  </div>
+
+  <div class="col-12 col-md-6">
+    <label class="form-label">Quantity (boxes)</label>
+    <input name="quantity" type="number" min="1" class="form-control" required
+           value="{{ form.get('quantity', '') }}">
+    {{ err('quantity') }}
+  </div>
+
+  <div class="col-12 col-md-6">
+    <label class="form-label">Received at</label>
+    <input name="received_at" type="datetime-local" class="form-control" required
+           value="{{ form.get('received_at', '') }}">
+    {{ err('received_at') }}
+  </div>
+
+  <div class="col-12 col-md-6">
+    <label class="form-label">Promised date (optional)</label>
+    <input name="promised_date" type="date" class="form-control"
+           value="{{ form.get('promised_date', '') }}">
+    {{ err('promised_date') }}
+  </div>
+
+  <div class="col-12 col-md-6">
+    <label class="form-label d-block">Material in stock?</label>
+    <div class="form-check form-check-inline">
+      <input class="form-check-input" type="radio" name="material_in_stock" value="yes" required
+        {% if form.get('material_in_stock') == 'yes' %}checked{% endif %}>
+      <label class="form-check-label">Yes</label>
+    </div>
+    <div class="form-check form-check-inline">
+      <input class="form-check-input" type="radio" name="material_in_stock" value="no"
+        {% if form.get('material_in_stock') == 'no' %}checked{% endif %}>
+      <label class="form-check-label">No</label>
+    </div>
+    {{ err('material_in_stock') }}
+  </div>
+
+  <div class="col-12 col-md-6">
+    <label class="form-label">Entered by</label>
+    <input name="entered_by" class="form-control" required
+           value="{{ form.get('entered_by', 'manager') }}">
+    {{ err('entered_by') }}
+  </div>
+
+  <div class="col-12">
+    <button class="btn btn-primary">Save order</button>
+  </div>
+</form>
+{% endblock %}

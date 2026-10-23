@@ -58,3 +58,4 @@ CREATE TABLE stage_events (
 
 CREATE INDEX idx_stage_events_order   ON stage_events(order_id);
 CREATE INDEX idx_stage_events_started ON stage_events(started_at);
+   CREATE UNIQUE INDEX uq_orders_code_ci ON orders (UPPER(order_code));
