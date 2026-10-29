@@ -10,11 +10,17 @@
   <nav class="navbar navbar-dark bg-dark mb-4">
     <div class="container">
       <a class="navbar-brand" href="{{ url_for('main.list_orders') }}">Workshop Tracker</a>
-      <div class="d-flex gap-2">
+      {% if g.user %}
+      <div class="d-flex flex-wrap gap-2 align-items-center">
         <a class="btn btn-light btn-sm" href="{{ url_for('main.list_orders') }}">Orders</a>
         <a class="btn btn-outline-light btn-sm" href="{{ url_for('main.new_order') }}">+ Order</a>
         <a class="btn btn-outline-light btn-sm" href="{{ url_for('main.new_stage_event') }}">+ Stage</a>
+        <span class="text-light small ms-2">{{ g.user.username }}</span>
+        <form method="post" action="{{ url_for('auth.logout') }}" class="d-inline">
+          <button class="btn btn-outline-warning btn-sm">Log out</button>
+        </form>
       </div>
+      {% endif %}
     </div>
   </nav>
   <main class="container">

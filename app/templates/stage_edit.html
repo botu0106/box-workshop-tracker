@@ -80,13 +80,6 @@
     {{ err('entry_mode') }}
   </div>
 
-  <div class="col-12 col-md-6">
-    <label class="form-label">Edited by</label>
-    <input name="entered_by" class="form-control" required
-           value="{{ form.get('entered_by', 'manager') }}">
-    {{ err('entered_by') }}
-  </div>
-
   <div class="col-12 d-flex gap-2">
     <button class="btn btn-primary">Save changes</button>
     <a class="btn btn-outline-secondary" href="{{ url_for('main.order_detail', order_id=stage.order_id) }}">Cancel</a>

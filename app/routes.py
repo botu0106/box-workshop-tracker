@@ -1,8 +1,9 @@
 from datetime import datetime
 
 import psycopg2
-from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
+from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, g
 
+from .auth import login_required
 from .db import get_db
 from .validation import validate_order, validate_stage_event
 
@@ -51,6 +52,13 @@ def to_input_datetime(value):
     return value.strftime("%Y-%m-%dT%H:%M") if value else ""
 
 
+def form_with_user():
+    """Copy the submitted form and set entered_by to the logged-in user."""
+    form = request.form.to_dict()
+    form["entered_by"] = g.user["username"]
+    return form
+
+
 # ---------- Basic pages ----------
 
 @bp.route("/health")
@@ -69,6 +77,7 @@ def index():
 # ---------- Orders ----------
 
 @bp.route("/orders")
+@login_required
 def list_orders():
     cur = get_db().cursor()
     cur.execute(
@@ -89,12 +98,13 @@ def list_orders():
 
 
 @bp.route("/orders/new", methods=["GET", "POST"])
+@login_required
 def new_order():
     box_types = get_box_types()
     errors, form = {}, {}
 
     if request.method == "POST":
-        form = request.form
+        form = form_with_user()
         valid_ids = {b["box_type_id"] for b in box_types}
         data, errors = validate_order(form, valid_ids)
 
@@ -133,6 +143,7 @@ def new_order():
 
 
 @bp.route("/orders/<int:order_id>")
+@login_required
 def order_detail(order_id):
     cur = get_db().cursor()
     cur.execute(
@@ -164,6 +175,7 @@ def order_detail(order_id):
 # ---------- Stage events ----------
 
 @bp.route("/stages/new", methods=["GET", "POST"])
+@login_required
 def new_stage_event():
     orders = get_open_orders()
     stages = get_stages()
@@ -180,7 +192,7 @@ def new_stage_event():
     now_str = datetime.now().strftime("%Y-%m-%dT%H:%M")
 
     if request.method == "POST":
-        form = request.form
+        form = form_with_user()
         # DB returns timezone-aware times; drop tzinfo to compare with form input
         order_map = {o["order_id"]: o["received_at"].replace(tzinfo=None) for o in orders}
         data, errors = validate_stage_event(
@@ -229,6 +241,7 @@ def new_stage_event():
 
 
 @bp.route("/stages/<int:stage_event_id>/edit", methods=["GET", "POST"])
+@login_required
 def edit_stage_event(stage_event_id):
     cur = get_db().cursor()
     cur.execute(
@@ -255,8 +268,8 @@ def edit_stage_event(stage_event_id):
     errors = {}
 
     if request.method == "POST":
-        # Order and stage cannot be changed on edit
-        form = request.form.to_dict()
+        # Order and stage cannot be changed on edit; the editor is the logged-in user
+        form = form_with_user()
         form["order_id"] = str(stage["order_id"])
         form["stage_id"] = str(stage["stage_id"])
 
@@ -304,7 +317,6 @@ def edit_stage_event(stage_event_id):
             "boxes_completed": "" if stage["boxes_completed"] is None else str(stage["boxes_completed"]),
             "boxes_defective": "" if stage["boxes_defective"] is None else str(stage["boxes_defective"]),
             "entry_mode": stage["entry_mode"],
-            "entered_by": "manager",
         }
 
     return render_template(

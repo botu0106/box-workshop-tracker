@@ -12,12 +12,15 @@ import psycopg2
 import psycopg2.extras
 import pytest
 from dotenv import load_dotenv
+from werkzeug.security import generate_password_hash
 
 from app import create_app
 
 load_dotenv()
 ROOT = Path(__file__).resolve().parent.parent
 TEST_DB = "workshop_test"
+TEST_USER = "manager"
+TEST_PASSWORD = "test-password"
 
 
 def _db_settings(dbname):
@@ -45,13 +48,17 @@ def test_db():
 
 @pytest.fixture()
 def flask_app(test_db):
-    """Rebuild the test schema and return an app connected to it."""
+    """Rebuild the test schema, add a test user and return an app connected to it."""
     conn = psycopg2.connect(**test_db)
     conn.autocommit = True
     with conn.cursor() as cur:
         cur.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
         cur.execute((ROOT / "db" / "schema.sql").read_text(encoding="utf-8"))
         cur.execute((ROOT / "db" / "reference_data.sql").read_text(encoding="utf-8"))
+        cur.execute(
+            "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, 'manager');",
+            (TEST_USER, generate_password_hash(TEST_PASSWORD)),
+        )
     conn.close()
 
     app = create_app({"TESTING": True, "DB": test_db, "SECRET_KEY": "test"})
@@ -59,8 +66,18 @@ def flask_app(test_db):
 
 
 @pytest.fixture()
-def client(flask_app):
+def anon_client(flask_app):
+    """A client that is not logged in."""
     return flask_app.test_client()
+
+
+@pytest.fixture()
+def client(flask_app):
+    """A client that is already logged in as the test user."""
+    c = flask_app.test_client()
+    response = c.post("/login", data={"username": TEST_USER, "password": TEST_PASSWORD})
+    assert response.status_code == 302
+    return c
 
 
 @pytest.fixture()
