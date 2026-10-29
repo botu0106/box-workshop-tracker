@@ -60,6 +60,14 @@ docker compose exec db psql -U workshop -d workshop_db -c "\dt"
 
 To reset the database completely (deletes all data): `docker compose down -v`, then repeat this section.
 
+## 2b. Create a user
+
+All data pages require login. Create a user (choose your own password):
+
+```bash
+python -m flask --app run create-user manager --password "choose-a-password"
+```
+
 ## 3. Run the application
 
 ```bash
