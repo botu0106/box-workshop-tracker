@@ -3,23 +3,40 @@ import os
 import click
 from dotenv import load_dotenv
 from flask import Flask
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash
 
 
 def create_app(test_config=None):
     load_dotenv()
     app = Flask(__name__)
+    production = os.getenv("APP_ENV") == "production"
 
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-only-key")
-    app.config["SESSION_COOKIE_HTTPONLY"] = True   # JavaScript cannot read the session cookie
-    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # basic protection against cross-site requests
-    app.config["DB"] = {
-        "host": os.getenv("DB_HOST", "localhost"),
-        "port": os.getenv("DB_PORT", "5433"),
-        "dbname": os.getenv("POSTGRES_DB"),
-        "user": os.getenv("POSTGRES_USER"),
-        "password": os.getenv("POSTGRES_PASSWORD"),
-    }
+    app.config["SESSION_COOKIE_HTTPONLY"] = True     # JavaScript cannot read the session cookie
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"    # basic protection against cross-site requests
+    app.config["SESSION_COOKIE_SECURE"] = production # in production the cookie is sent only over HTTPS
+
+    # In the cloud the database comes as one connection string (DATABASE_URL);
+    # locally the separate settings from .env are used.
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        app.config["DB"] = {"dsn": database_url}
+    else:
+        app.config["DB"] = {
+            "host": os.getenv("DB_HOST", "localhost"),
+            "port": os.getenv("DB_PORT", "5433"),
+            "dbname": os.getenv("POSTGRES_DB"),
+            "user": os.getenv("POSTGRES_USER"),
+            "password": os.getenv("POSTGRES_PASSWORD"),
+        }
+
+    if production:
+        if app.config["SECRET_KEY"] == "dev-only-key":
+            raise RuntimeError("SECRET_KEY must be set in production.")
+        # The hosting platform sits in front of the app as a reverse proxy;
+        # this makes Flask trust its information about HTTPS and the client IP.
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
     if test_config:
         app.config.update(test_config)
