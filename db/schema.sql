@@ -1,3 +1,5 @@
+-- Safe to run more than once: objects are only created if they do not exist.
+
 -- Reference tables
 CREATE TABLE IF NOT EXISTS box_types (
     box_type_id SERIAL PRIMARY KEY,
@@ -47,11 +49,15 @@ CREATE TABLE IF NOT EXISTS orders (
     material_in_stock      BOOLEAN NOT NULL,
     open_orders_at_receipt INT NOT NULL CHECK (open_orders_at_receipt >= 0),
     completed_at           TIMESTAMPTZ,
+    completed_by           TEXT,
     entered_by             TEXT NOT NULL,
     source                 TEXT NOT NULL DEFAULT 'web_form',
     created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
     CHECK (completed_at IS NULL OR completed_at >= received_at)
 );
+
+-- Added after the first release: keep existing databases in step
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS completed_by TEXT;
 
 -- Production stage events
 CREATE TABLE IF NOT EXISTS stage_events (

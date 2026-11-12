@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import psycopg2
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, g
@@ -169,7 +169,98 @@ def order_detail(order_id):
         """,
         (order_id,),
     )
-    return render_template("order_detail.html", order=order, stages=cur.fetchall())
+    stages = cur.fetchall()
+
+    # Suggested completion time: when the last stage finished, otherwise now
+    finished_times = [s["finished_at"] for s in stages if s["finished_at"]]
+    has_open_stage = any(s["finished_at"] is None for s in stages)
+    if finished_times:
+        default_completed = to_input_datetime(max(finished_times))
+    else:
+        default_completed = datetime.now().strftime("%Y-%m-%dT%H:%M")
+
+    return render_template(
+        "order_detail.html",
+        order=order, stages=stages,
+        has_open_stage=has_open_stage, default_completed=default_completed,
+    )
+
+
+@bp.route("/orders/<int:order_id>/complete", methods=["POST"])
+@login_required
+def complete_order(order_id):
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT received_at, completed_at FROM orders WHERE order_id = %s;",
+            (order_id,),
+        )
+        order = cur.fetchone()
+        if order is None:
+            abort(404)
+        cur.execute(
+            """
+            SELECT COUNT(*) FILTER (WHERE finished_at IS NULL) AS open_stages,
+                   MAX(finished_at) AS last_finished
+            FROM stage_events WHERE order_id = %s;
+            """,
+            (order_id,),
+        )
+        info = cur.fetchone()
+
+    error = None
+    completed_at = None
+    try:
+        completed_at = datetime.fromisoformat(request.form.get("completed_at") or "")
+    except ValueError:
+        error = "Toʻgʻri sana va vaqtni kiriting."
+
+    if error is None:
+        received = order["received_at"].replace(tzinfo=None)
+        last_finished = info["last_finished"].replace(tzinfo=None) if info["last_finished"] else None
+        if order["completed_at"] is not None:
+            error = "Bu buyurtma allaqachon tayyor deb belgilangan."
+        elif info["open_stages"] > 0:
+            error = "Tugallanmagan bosqichlar bor. Avval ularni yakunlang."
+        elif completed_at > datetime.now() + timedelta(minutes=5):
+            error = "Tayyor boʻlgan vaqt kelajakda boʻlishi mumkin emas."
+        elif completed_at < received:
+            error = "Tayyor boʻlgan vaqt qabul qilingan vaqtdan oldin boʻlishi mumkin emas."
+        elif last_finished and completed_at < last_finished:
+            error = "Tayyor boʻlgan vaqt oxirgi bosqich tugashidan oldin boʻlishi mumkin emas."
+
+    if error:
+        flash(error, "danger")
+        return redirect(url_for("main.order_detail", order_id=order_id))
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE orders SET completed_at = %s, completed_by = %s WHERE order_id = %s;",
+            (completed_at, g.user["username"], order_id),
+        )
+    conn.commit()
+    flash("Buyurtma tayyor deb belgilandi.", "success")
+    return redirect(url_for("main.order_detail", order_id=order_id))
+
+
+@bp.route("/orders/<int:order_id>/reopen", methods=["POST"])
+@login_required
+def reopen_order(order_id):
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE orders SET completed_at = NULL, completed_by = NULL
+            WHERE order_id = %s
+            RETURNING order_id;
+            """,
+            (order_id,),
+        )
+        if cur.fetchone() is None:
+            abort(404)
+    conn.commit()
+    flash("Buyurtma qayta ochildi.", "success")
+    return redirect(url_for("main.order_detail", order_id=order_id))
 
 
 # ---------- Stage events ----------

@@ -3,7 +3,7 @@
 {% block content %}
 <h1 class="h3 mb-3">Buyurtma {{ order.order_code }}</h1>
 
-<div class="card mb-4">
+<div class="card mb-3">
   <div class="card-body">
     <div class="row g-2 small">
       <div class="col-6 col-md-3"><strong>Quti turi:</strong> {{ order.box_type }}</div>
@@ -15,6 +15,38 @@
       <div class="col-6 col-md-3"><strong>Kiritgan:</strong> {{ order.entered_by }} ({{ order.source }})</div>
       <div class="col-6 col-md-3"><strong>Kiritilgan vaqt:</strong> {{ order.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
     </div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    {% if order.completed_at %}
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <span class="badge bg-success me-2">Tayyor</span>
+          {{ order.completed_at.strftime('%d.%m.%Y %H:%M') }}
+          {% if order.completed_by %}<span class="text-muted small">({{ order.completed_by }})</span>{% endif %}
+        </div>
+        <form method="post" action="{{ url_for('main.reopen_order', order_id=order.order_id) }}"
+              onsubmit="return confirm('Buyurtmani qayta ochmoqchimisiz?');">
+          <button class="btn btn-sm btn-outline-secondary">Qayta ochish</button>
+        </form>
+      </div>
+    {% elif has_open_stage %}
+      <p class="mb-0 text-muted">Buyurtmani tayyor deb belgilash uchun avval barcha bosqichlarni yakunlang.</p>
+    {% else %}
+      <form method="post" action="{{ url_for('main.complete_order', order_id=order.order_id) }}"
+            class="row g-2 align-items-end">
+        <div class="col-12 col-md-5">
+          <label class="form-label">Tayyor boʻlgan vaqt</label>
+          <input name="completed_at" type="datetime-local" class="form-control" required
+                 value="{{ default_completed }}">
+        </div>
+        <div class="col-12 col-md-4">
+          <button class="btn btn-success w-100">Buyurtma tayyor</button>
+        </div>
+      </form>
+    {% endif %}
   </div>
 </div>
 
