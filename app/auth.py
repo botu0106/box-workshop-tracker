@@ -55,7 +55,7 @@ def login():
 
         # Same message for unknown user and wrong password, so usernames cannot be guessed
         if user is None or not check_password_hash(user["password_hash"], password):
-            error = "Incorrect username or password."
+            error = "Login yoki parol notoʻgʻri."
         else:
             session.clear()
             session["user_id"] = user["user_id"]
@@ -67,5 +67,5 @@ def login():
 @bp.route("/logout", methods=["POST"])
 def logout():
     session.clear()
-    flash("You have been logged out.", "success")
+    flash("Tizimdan chiqdingiz.", "success")
     return redirect(url_for("auth.login"))

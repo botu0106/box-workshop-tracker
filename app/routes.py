@@ -131,13 +131,13 @@ def new_order():
                         """,
                         data,
                     )
-                    new_id = cur.fetchone()["order_id"]
+                    cur.fetchone()
                 conn.commit()
-                flash(f"Order {data['order_code']} saved (ID {new_id}).", "success")
+                flash(f"{data['order_code']} raqamli buyurtma saqlandi.", "success")
                 return redirect(url_for("main.list_orders"))
             except psycopg2.errors.UniqueViolation:
                 conn.rollback()
-                errors["order_code"] = "An order with this code already exists."
+                errors["order_code"] = "Bunday raqamli buyurtma allaqachon mavjud."
 
     return render_template("order_form.html", box_types=box_types, errors=errors, form=form)
 
@@ -224,13 +224,13 @@ def new_stage_event():
                         """,
                         data,
                     )
-                    new_id = cur.fetchone()["stage_event_id"]
+                    cur.fetchone()
                 conn.commit()
-                flash(f"Stage saved (ID {new_id}).", "success")
+                flash("Bosqich saqlandi.", "success")
                 return redirect(url_for("main.order_detail", order_id=data["order_id"]))
             except psycopg2.IntegrityError:
                 conn.rollback()
-                flash("The database rejected this record. Please check the values.", "danger")
+                flash("Maʼlumotlar bazasi bu yozuvni qabul qilmadi. Qiymatlarni tekshiring.", "danger")
 
     return render_template(
         "stage_form.html",
@@ -303,11 +303,11 @@ def edit_stage_event(stage_event_id):
                         data,
                     )
                 conn.commit()
-                flash("Stage updated.", "success")
+                flash("Bosqich yangilandi.", "success")
                 return redirect(url_for("main.order_detail", order_id=stage["order_id"]))
             except psycopg2.IntegrityError:
                 conn.rollback()
-                flash("The database rejected this change. Please check the values.", "danger")
+                flash("Maʼlumotlar bazasi bu oʻzgarishni qabul qilmadi. Qiymatlarni tekshiring.", "danger")
     else:
         form = {
             "machine_id": str(stage["machine_id"]) if stage["machine_id"] else "",

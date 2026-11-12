@@ -9,7 +9,6 @@ VALID_ORDER = {
     "received_at": "2026-10-20T09:00",
     "promised_date": "2026-10-27",
     "material_in_stock": "yes",
-    "entered_by": "manager",
 }
 
 
@@ -22,7 +21,7 @@ def test_health_reports_reference_data(client):
 def test_valid_order_is_saved_with_provenance(client, db_cursor):
     response = client.post("/orders/new", data=VALID_ORDER, follow_redirects=True)
     assert response.status_code == 200
-    assert b"T-100" in response.data  # visible on the orders list
+    assert "T-100" in response.get_data(as_text=True)  # visible on the orders list
 
     db_cursor.execute("SELECT * FROM orders WHERE order_code = 'T-100';")
     row = db_cursor.fetchone()
@@ -36,7 +35,7 @@ def test_valid_order_is_saved_with_provenance(client, db_cursor):
 def test_invalid_order_is_not_saved(client, db_cursor):
     response = client.post("/orders/new", data={**VALID_ORDER, "quantity": "-1"})
     assert response.status_code == 200
-    assert b"Quantity must be a positive whole number." in response.data
+    assert "Soni musbat butun son" in response.get_data(as_text=True)
 
     db_cursor.execute("SELECT COUNT(*) AS n FROM orders;")
     assert db_cursor.fetchone()["n"] == 0
@@ -45,7 +44,7 @@ def test_invalid_order_is_not_saved(client, db_cursor):
 def test_duplicate_order_code_is_rejected_case_insensitively(client, db_cursor):
     client.post("/orders/new", data={**VALID_ORDER, "order_code": "t-200"})
     response = client.post("/orders/new", data={**VALID_ORDER, "order_code": "T-200"})
-    assert b"already exists" in response.data
+    assert "allaqachon mavjud" in response.get_data(as_text=True)
 
     db_cursor.execute("SELECT COUNT(*) AS n FROM orders;")
     assert db_cursor.fetchone()["n"] == 1
@@ -72,12 +71,11 @@ def test_stage_is_saved_and_shown_on_order_page(client, db_cursor):
             "boxes_completed": "1000",
             "boxes_defective": "3",
             "entry_mode": "end_of_day",
-            "entered_by": "manager",
         },
         follow_redirects=True,
     )
     assert response.status_code == 200
-    assert b"Corrugated board cutting" in response.data
+    assert "Gofrokarton kesish" in response.get_data(as_text=True)
 
     db_cursor.execute("SELECT * FROM stage_events WHERE order_id = %s;", (order_id,))
     stage = db_cursor.fetchone()
@@ -97,7 +95,7 @@ def test_database_rejects_machine_not_allowed_for_stage(db_cursor):
     )
     order_id = db_cursor.fetchone()["order_id"]
 
-    # Gluing on the corrugating machine must be blocked by the database itself
+    # Manual gluing on the corrugating machine must be blocked by the database itself
     with pytest.raises(psycopg2.errors.ForeignKeyViolation):
         db_cursor.execute(
             """

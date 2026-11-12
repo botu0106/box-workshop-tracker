@@ -1,26 +1,26 @@
 {% extends "base.html" %}
-{% block title %}New stage{% endblock %}
+{% block title %}Yangi bosqich{% endblock %}
 
 {% macro err(name) %}
   {% if errors.get(name) %}<div class="text-danger small">{{ errors[name] }}</div>{% endif %}
 {% endmacro %}
 
 {% block content %}
-<h1 class="h3 mb-3">Record a production stage</h1>
+<h1 class="h3 mb-3">Ishlab chiqarish bosqichini kiritish</h1>
 
 {% if not orders %}
-  <p class="text-muted">There are no open orders. <a href="{{ url_for('main.new_order') }}">Add an order first.</a></p>
+  <p class="text-muted">Ochiq buyurtmalar yoʻq. <a href="{{ url_for('main.new_order') }}">Avval buyurtma qoʻshing.</a></p>
 {% else %}
 <form method="post" class="row g-3">
 
   <div class="col-12 col-md-6">
-    <label class="form-label">Order</label>
+    <label class="form-label">Buyurtma</label>
     <select name="order_id" class="form-select" required>
-      <option value="">Choose...</option>
+      <option value="">Tanlang...</option>
       {% for o in orders %}
         <option value="{{ o.order_id }}"
           {% if form.get('order_id') == o.order_id|string %}selected{% endif %}>
-          {{ o.order_code }} (received {{ o.received_at.strftime('%d.%m %H:%M') }})
+          {{ o.order_code }} (qabul: {{ o.received_at.strftime('%d.%m %H:%M') }})
         </option>
       {% endfor %}
     </select>
@@ -28,9 +28,9 @@
   </div>
 
   <div class="col-12 col-md-6">
-    <label class="form-label">Stage</label>
+    <label class="form-label">Bosqich</label>
     <select name="stage_id" class="form-select" required>
-      <option value="">Choose...</option>
+      <option value="">Tanlang...</option>
       {% for s in stages %}
         <option value="{{ s.stage_id }}"
           {% if form.get('stage_id') == s.stage_id|string %}selected{% endif %}>
@@ -42,7 +42,7 @@
   </div>
 
   <div class="col-12 col-md-6">
-    <label class="form-label">Machine</label>
+    <label class="form-label">Stanok</label>
     <select name="machine_id" class="form-select">
       <option value="">—</option>
       {% for m in machines %}
@@ -57,7 +57,7 @@
   </div>
 
   <div class="col-12 col-md-6">
-    <label class="form-label">Operators</label>
+    <label class="form-label">Operatorlar soni</label>
     <select name="operators" class="form-select">
       <option value="">—</option>
       <option value="1" {% if form.get('operators') == '1' %}selected{% endif %}>1</option>
@@ -67,44 +67,44 @@
   </div>
 
   <div class="col-12 col-md-6">
-    <label class="form-label">Started at</label>
+    <label class="form-label">Boshlangan vaqt</label>
     <input name="started_at" type="datetime-local" class="form-control" required
            value="{{ form.get('started_at', now_str) }}">
     {{ err('started_at') }}
   </div>
 
   <div class="col-12 col-md-6">
-    <label class="form-label">Finished at (leave empty if still running)</label>
+    <label class="form-label">Tugagan vaqt (hali davom etayotgan boʻlsa, boʻsh qoldiring)</label>
     <input name="finished_at" type="datetime-local" class="form-control"
            value="{{ form.get('finished_at', '') }}">
     {{ err('finished_at') }}
   </div>
 
   <div class="col-6 col-md-3">
-    <label class="form-label">Boxes completed</label>
+    <label class="form-label">Tayyor qutilar</label>
     <input name="boxes_completed" type="number" min="0" class="form-control"
            value="{{ form.get('boxes_completed', '') }}">
     {{ err('boxes_completed') }}
   </div>
 
   <div class="col-6 col-md-3">
-    <label class="form-label">Defective boxes</label>
+    <label class="form-label">Brak qutilar</label>
     <input name="boxes_defective" type="number" min="0" class="form-control"
            value="{{ form.get('boxes_defective', '') }}">
     {{ err('boxes_defective') }}
   </div>
 
   <div class="col-12 col-md-6">
-    <label class="form-label">Entry mode</label>
+    <label class="form-label">Kiritish usuli</label>
     <select name="entry_mode" class="form-select">
-      <option value="realtime" {% if form.get('entry_mode') != 'end_of_day' %}selected{% endif %}>Recorded as it happened</option>
-      <option value="end_of_day" {% if form.get('entry_mode') == 'end_of_day' %}selected{% endif %}>Entered later (end of day)</option>
+      <option value="realtime" {% if form.get('entry_mode') != 'end_of_day' %}selected{% endif %}>Jarayonda kiritildi</option>
+      <option value="end_of_day" {% if form.get('entry_mode') == 'end_of_day' %}selected{% endif %}>Keyinroq kiritildi (kun oxirida)</option>
     </select>
     {{ err('entry_mode') }}
   </div>
 
   <div class="col-12">
-    <button class="btn btn-primary">Save stage</button>
+    <button class="btn btn-primary">Bosqichni saqlash</button>
   </div>
 </form>
 {% endif %}
@@ -133,18 +133,18 @@
 
     if (!stageSelect.value) {
       machineSelect.disabled = true;
-      machineHint.textContent = "Choose a stage first.";
+      machineHint.textContent = "Avval bosqichni tanlang.";
     } else if (allowed.length === 0) {
       machineSelect.value = "";
       machineSelect.disabled = true;
-      machineHint.textContent = "This stage does not use a machine.";
+      machineHint.textContent = "Bu bosqichda stanok ishlatilmaydi.";
     } else if (allowed.length === 1) {
       machineSelect.disabled = false;
       machineSelect.value = String(allowed[0]);
-      machineHint.textContent = "Selected automatically (only one machine for this stage).";
+      machineHint.textContent = "Avtomatik tanlandi (bu bosqich uchun bitta stanok).";
     } else {
       machineSelect.disabled = false;
-      machineHint.textContent = "Choose one of the machines for this stage.";
+      machineHint.textContent = "Bu bosqich uchun stanoklardan birini tanlang.";
     }
   }
 

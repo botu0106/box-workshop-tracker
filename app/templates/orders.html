@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Orders{% endblock %}
+{% block title %}Buyurtmalar{% endblock %}
 {% block content %}
-<h1 class="h3 mb-3">Orders</h1>
+<h1 class="h3 mb-3">Buyurtmalar</h1>
 {% if orders %}
 <div class="table-responsive">
   <table class="table table-sm table-striped align-middle">
     <thead>
       <tr>
-        <th>Code</th><th>Box type</th><th>Qty</th><th>Received</th>
-        <th>Promised</th><th>Status</th><th>Stages</th><th>Last stage</th>
+        <th>Raqam</th><th>Quti turi</th><th>Soni</th><th>Qabul qilingan</th>
+        <th>Vaʼda sanasi</th><th>Holati</th><th>Bosqichlar</th><th>Oxirgi bosqich</th>
       </tr>
     </thead>
     <tbody>
@@ -17,15 +17,15 @@
         <td><a href="{{ url_for('main.order_detail', order_id=o.order_id) }}">{{ o.order_code }}</a></td>
         <td>{{ o.box_type }}</td>
         <td>{{ o.quantity }}</td>
-        <td>{{ o.received_at.strftime('%Y-%m-%d %H:%M') }}</td>
-        <td>{{ o.promised_date or '—' }}</td>
+        <td>{{ o.received_at.strftime('%d.%m.%Y %H:%M') }}</td>
+        <td>{{ o.promised_date.strftime('%d.%m.%Y') if o.promised_date else '—' }}</td>
         <td>
           {% if o.completed_at %}
-            <span class="badge bg-success">Completed</span>
+            <span class="badge bg-success">Tayyor</span>
           {% elif o.stage_count > 0 %}
-            <span class="badge bg-primary">In progress</span>
+            <span class="badge bg-primary">Jarayonda</span>
           {% else %}
-            <span class="badge bg-secondary">Waiting</span>
+            <span class="badge bg-secondary">Kutilmoqda</span>
           {% endif %}
         </td>
         <td>{{ o.stage_count }}</td>
@@ -36,6 +36,6 @@
   </table>
 </div>
 {% else %}
-<p class="text-muted">No orders yet.</p>
+<p class="text-muted">Hozircha buyurtmalar yoʻq.</p>
 {% endif %}
 {% endblock %}

@@ -1,27 +1,27 @@
 {% extends "base.html" %}
-{% block title %}Order {{ order.order_code }}{% endblock %}
+{% block title %}Buyurtma {{ order.order_code }}{% endblock %}
 {% block content %}
-<h1 class="h3 mb-3">Order {{ order.order_code }}</h1>
+<h1 class="h3 mb-3">Buyurtma {{ order.order_code }}</h1>
 
 <div class="card mb-4">
   <div class="card-body">
     <div class="row g-2 small">
-      <div class="col-6 col-md-3"><strong>Box type:</strong> {{ order.box_type }}</div>
-      <div class="col-6 col-md-3"><strong>Quantity:</strong> {{ order.quantity }}</div>
-      <div class="col-6 col-md-3"><strong>Received:</strong> {{ order.received_at.strftime('%Y-%m-%d %H:%M') }}</div>
-      <div class="col-6 col-md-3"><strong>Promised:</strong> {{ order.promised_date or '—' }}</div>
-      <div class="col-6 col-md-3"><strong>Material:</strong> {{ 'In stock' if order.material_in_stock else 'Not in stock' }}</div>
-      <div class="col-6 col-md-3"><strong>Open orders at receipt:</strong> {{ order.open_orders_at_receipt }}</div>
-      <div class="col-6 col-md-3"><strong>Entered by:</strong> {{ order.entered_by }} ({{ order.source }})</div>
-      <div class="col-6 col-md-3"><strong>Entered at:</strong> {{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+      <div class="col-6 col-md-3"><strong>Quti turi:</strong> {{ order.box_type }}</div>
+      <div class="col-6 col-md-3"><strong>Soni:</strong> {{ order.quantity }}</div>
+      <div class="col-6 col-md-3"><strong>Qabul qilingan:</strong> {{ order.received_at.strftime('%d.%m.%Y %H:%M') }}</div>
+      <div class="col-6 col-md-3"><strong>Vaʼda sanasi:</strong> {{ order.promised_date.strftime('%d.%m.%Y') if order.promised_date else '—' }}</div>
+      <div class="col-6 col-md-3"><strong>Xomashyo:</strong> {{ 'Omborda bor' if order.material_in_stock else 'Omborda yoʻq' }}</div>
+      <div class="col-6 col-md-3"><strong>Qabul paytida ochiq buyurtmalar:</strong> {{ order.open_orders_at_receipt }}</div>
+      <div class="col-6 col-md-3"><strong>Kiritgan:</strong> {{ order.entered_by }} ({{ order.source }})</div>
+      <div class="col-6 col-md-3"><strong>Kiritilgan vaqt:</strong> {{ order.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
     </div>
   </div>
 </div>
 
 <div class="d-flex justify-content-between align-items-center mb-2">
-  <h2 class="h5 mb-0">Production stages</h2>
+  <h2 class="h5 mb-0">Ishlab chiqarish bosqichlari</h2>
   {% if not order.completed_at %}
-    <a class="btn btn-sm btn-primary" href="{{ url_for('main.new_stage_event', order_id=order.order_id) }}">+ Add stage</a>
+    <a class="btn btn-sm btn-primary" href="{{ url_for('main.new_stage_event', order_id=order.order_id) }}">+ Bosqich qoʻshish</a>
   {% endif %}
 </div>
 
@@ -30,9 +30,9 @@
   <table class="table table-sm table-striped align-middle">
     <thead>
       <tr>
-        <th>Stage</th><th>Machine</th><th>Started</th><th>Finished</th>
-        <th>Operators</th><th>Completed</th><th>Defective</th>
-        <th>Entry mode</th><th>Entered</th><th>Last edit</th><th></th>
+        <th>Bosqich</th><th>Stanok</th><th>Boshlandi</th><th>Tugadi</th>
+        <th>Operatorlar</th><th>Tayyor</th><th>Brak</th>
+        <th>Kiritish usuli</th><th>Kiritildi</th><th>Oxirgi tahrir</th><th></th>
       </tr>
     </thead>
     <tbody>
@@ -45,13 +45,13 @@
           {% if s.finished_at %}
             {{ s.finished_at.strftime('%d.%m %H:%M') }}
           {% else %}
-            <span class="badge bg-warning text-dark">In progress</span>
+            <span class="badge bg-warning text-dark">Jarayonda</span>
           {% endif %}
         </td>
         <td>{{ s.operators or '—' }}</td>
         <td>{{ s.boxes_completed if s.boxes_completed is not none else '—' }}</td>
         <td>{{ s.boxes_defective if s.boxes_defective is not none else '—' }}</td>
-        <td>{{ s.entry_mode }}</td>
+        <td>{{ 'Kun oxirida' if s.entry_mode == 'end_of_day' else 'Jarayonda' }}</td>
         <td class="small">{{ s.entered_by }}<br>{{ s.created_at.strftime('%d.%m %H:%M') }}</td>
         <td class="small">
           {% if s.updated_at %}
@@ -60,7 +60,7 @@
         </td>
         <td>
           <a class="btn btn-sm btn-outline-primary"
-             href="{{ url_for('main.edit_stage_event', stage_event_id=s.stage_event_id) }}">Edit</a>
+             href="{{ url_for('main.edit_stage_event', stage_event_id=s.stage_event_id) }}">Tahrirlash</a>
         </td>
       </tr>
       {% endfor %}
@@ -68,6 +68,6 @@
   </table>
 </div>
 {% else %}
-<p class="text-muted">No stages recorded yet.</p>
+<p class="text-muted">Hozircha bosqichlar kiritilmagan.</p>
 {% endif %}
 {% endblock %}

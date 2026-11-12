@@ -1,28 +1,28 @@
 {% extends "base.html" %}
-{% block title %}Log in{% endblock %}
+{% block title %}Kirish{% endblock %}
 {% block content %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <div class="row justify-content-center">
   <div class="col-12 col-sm-8 col-md-5">
-    <h1 class="h3 mb-3">Log in</h1>
+    <h1 class="h3 mb-3">Kirish</h1>
     {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
     <form method="post" class="d-grid gap-3">
       <div>
-        <label class="form-label">Username</label>
+        <label class="form-label">Login</label>
         <input name="username" class="form-control" required autocomplete="username" autofocus>
       </div>
       <div>
-        <label class="form-label">Password</label>
+        <label class="form-label">Parol</label>
         <div class="input-group">
           <input name="password" id="password" type="password" class="form-control"
                  required autocomplete="current-password">
           <button type="button" class="btn btn-outline-secondary" id="toggle-password"
-                  aria-label="Show password">
+                  aria-label="Parolni koʻrsatish">
             <i class="bi bi-eye" id="toggle-icon"></i>
           </button>
         </div>
       </div>
-      <button class="btn btn-primary">Log in</button>
+      <button class="btn btn-primary">Kirish</button>
     </form>
   </div>
 </div>
@@ -39,7 +39,7 @@
     const hidden = passwordInput.type === "password";
     passwordInput.type = hidden ? "text" : "password";
     toggleIcon.className = hidden ? "bi bi-eye-slash" : "bi bi-eye";
-    toggleButton.setAttribute("aria-label", hidden ? "Hide password" : "Show password");
+    toggleButton.setAttribute("aria-label", hidden ? "Parolni yashirish" : "Parolni koʻrsatish");
   });
 </script>
 {% endblock %}

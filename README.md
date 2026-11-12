@@ -9,6 +9,12 @@ order lead time.
 Module: UDE5014CM Data Science for Developers — Assessment 2
 Current stage: **Checkpoint 1 – Data collection MVP**
 
+The user interface is in **Uzbek**, because the workshop manager works in
+Uzbek. Code, documentation and reports are in English. Key labels:
+*Buyurtmalar* = Orders, *+ Buyurtma* = New order, *+ Bosqich* = New stage, *Kirish*
+= Log in, *Tahrirlash* = Edit. *Kleyval* is the workshop's name for the machine that
+bonds corrugated layers and mounts offset prints onto board.
+
 ## Requirements
 
 - Python 3.12 or 3.13

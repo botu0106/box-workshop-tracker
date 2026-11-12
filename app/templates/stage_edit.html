@@ -1,21 +1,21 @@
 {% extends "base.html" %}
-{% block title %}Edit stage{% endblock %}
+{% block title %}Bosqichni tahrirlash{% endblock %}
 
 {% macro err(name) %}
   {% if errors.get(name) %}<div class="text-danger small">{{ errors[name] }}</div>{% endif %}
 {% endmacro %}
 
 {% block content %}
-<h1 class="h3 mb-1">Edit stage: {{ stage.stage_name }}</h1>
+<h1 class="h3 mb-1">Bosqichni tahrirlash: {{ stage.stage_name }}</h1>
 <p class="text-muted mb-3">
-  Order {{ stage.order_code }} · originally entered by {{ stage.entered_by }}
-  at {{ stage.created_at.strftime('%Y-%m-%d %H:%M') }}
+  Buyurtma {{ stage.order_code }} · dastlab kiritgan: {{ stage.entered_by }},
+  {{ stage.created_at.strftime('%d.%m.%Y %H:%M') }}
 </p>
 
 <form method="post" class="row g-3">
 
   <div class="col-12 col-md-6">
-    <label class="form-label">Machine</label>
+    <label class="form-label">Stanok</label>
     {% if machines_for_stage %}
       <select name="machine_id" class="form-select">
         <option value="">—</option>
@@ -28,13 +28,13 @@
       </select>
     {% else %}
       <input type="hidden" name="machine_id" value="">
-      <div class="form-text">This stage does not use a machine.</div>
+      <div class="form-text">Bu bosqichda stanok ishlatilmaydi.</div>
     {% endif %}
     {{ err('machine_id') }}
   </div>
 
   <div class="col-12 col-md-6">
-    <label class="form-label">Operators</label>
+    <label class="form-label">Operatorlar soni</label>
     <select name="operators" class="form-select">
       <option value="">—</option>
       <option value="1" {% if form.get('operators') == '1' %}selected{% endif %}>1</option>
@@ -44,45 +44,45 @@
   </div>
 
   <div class="col-12 col-md-6">
-    <label class="form-label">Started at</label>
+    <label class="form-label">Boshlangan vaqt</label>
     <input name="started_at" type="datetime-local" class="form-control" required
            value="{{ form.get('started_at', '') }}">
     {{ err('started_at') }}
   </div>
 
   <div class="col-12 col-md-6">
-    <label class="form-label">Finished at</label>
+    <label class="form-label">Tugagan vaqt</label>
     <input name="finished_at" type="datetime-local" class="form-control"
            value="{{ form.get('finished_at', '') }}">
     {{ err('finished_at') }}
   </div>
 
   <div class="col-6 col-md-3">
-    <label class="form-label">Boxes completed</label>
+    <label class="form-label">Tayyor qutilar</label>
     <input name="boxes_completed" type="number" min="0" class="form-control"
            value="{{ form.get('boxes_completed', '') }}">
     {{ err('boxes_completed') }}
   </div>
 
   <div class="col-6 col-md-3">
-    <label class="form-label">Defective boxes</label>
+    <label class="form-label">Brak qutilar</label>
     <input name="boxes_defective" type="number" min="0" class="form-control"
            value="{{ form.get('boxes_defective', '') }}">
     {{ err('boxes_defective') }}
   </div>
 
   <div class="col-12 col-md-6">
-    <label class="form-label">Entry mode</label>
+    <label class="form-label">Kiritish usuli</label>
     <select name="entry_mode" class="form-select">
-      <option value="realtime" {% if form.get('entry_mode') != 'end_of_day' %}selected{% endif %}>Recorded as it happened</option>
-      <option value="end_of_day" {% if form.get('entry_mode') == 'end_of_day' %}selected{% endif %}>Entered later (end of day)</option>
+      <option value="realtime" {% if form.get('entry_mode') != 'end_of_day' %}selected{% endif %}>Jarayonda kiritildi</option>
+      <option value="end_of_day" {% if form.get('entry_mode') == 'end_of_day' %}selected{% endif %}>Keyinroq kiritildi (kun oxirida)</option>
     </select>
     {{ err('entry_mode') }}
   </div>
 
   <div class="col-12 d-flex gap-2">
-    <button class="btn btn-primary">Save changes</button>
-    <a class="btn btn-outline-secondary" href="{{ url_for('main.order_detail', order_id=stage.order_id) }}">Cancel</a>
+    <button class="btn btn-primary">Oʻzgarishlarni saqlash</button>
+    <a class="btn btn-outline-secondary" href="{{ url_for('main.order_detail', order_id=stage.order_id) }}">Bekor qilish</a>
   </div>
 </form>
 {% endblock %}

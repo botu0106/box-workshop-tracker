@@ -25,7 +25,7 @@ def test_health_check_stays_public(anon_client):
 def test_wrong_password_is_rejected(anon_client):
     response = anon_client.post("/login", data={"username": TEST_USER, "password": "wrong"})
     assert response.status_code == 200
-    assert b"Incorrect username or password." in response.data
+    assert "Login yoki parol notoʻgʻri." in response.get_data(as_text=True)
     assert anon_client.get("/orders").status_code == 302  # still not logged in
 
 
