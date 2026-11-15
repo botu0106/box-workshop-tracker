@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Bosqichni boshlash{% endblock %}
+{% block content %}
+<div style="max-width: 520px;">
+  <div class="small text-secondary">Buyurtma № {{ order.order_code }}</div>
+  <h1 class="h4 mb-3">{{ stage.name }}: boshlash</h1>
+  <form method="post" class="d-grid gap-3">
+    <div>
+      <label class="form-label fw-semibold" for="started_at">Qachon boshlandi?</label>
+      <input id="started_at" name="started_at" type="datetime-local" class="form-control form-control-lg"
+             required value="{{ now_str }}">
+    </div>
+    <button class="btn btn-primary btn-lg py-3 fw-semibold">Boshlash</button>
+    <a class="btn btn-link" href="{{ url_for('main.order_detail', order_id=order.order_id) }}">Bekor qilish</a>
+  </form>
+</div>
+{% endblock %}

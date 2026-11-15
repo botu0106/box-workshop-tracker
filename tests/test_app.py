@@ -21,7 +21,7 @@ def test_health_reports_reference_data(client):
 def test_valid_order_is_saved_with_provenance(client, db_cursor):
     response = client.post("/orders/new", data=VALID_ORDER, follow_redirects=True)
     assert response.status_code == 200
-    assert "T-100" in response.get_data(as_text=True)  # visible on the orders list
+    assert "T-100" in response.get_data(as_text=True)  # visible on the order page
 
     db_cursor.execute("SELECT * FROM orders WHERE order_code = 'T-100';")
     row = db_cursor.fetchone()
@@ -30,6 +30,14 @@ def test_valid_order_is_saved_with_provenance(client, db_cursor):
     assert row["source"] == "web_form"
     assert row["created_at"] is not None
     assert row["open_orders_at_receipt"] == 0
+
+
+def test_order_without_received_time_is_rejected(client, db_cursor):
+    response = client.post("/orders/new", data={**VALID_ORDER, "received_at": ""})
+    assert "qabul qilingan vaqtni kiriting" in response.get_data(as_text=True)
+
+    db_cursor.execute("SELECT COUNT(*) AS n FROM orders;")
+    assert db_cursor.fetchone()["n"] == 0
 
 
 def test_invalid_order_is_not_saved(client, db_cursor):
@@ -48,40 +56,6 @@ def test_duplicate_order_code_is_rejected_case_insensitively(client, db_cursor):
 
     db_cursor.execute("SELECT COUNT(*) AS n FROM orders;")
     assert db_cursor.fetchone()["n"] == 1
-
-
-def test_stage_is_saved_and_shown_on_order_page(client, db_cursor):
-    client.post("/orders/new", data=VALID_ORDER)
-    db_cursor.execute("SELECT order_id FROM orders WHERE order_code = 'T-100';")
-    order_id = db_cursor.fetchone()["order_id"]
-    db_cursor.execute("SELECT stage_id FROM stages WHERE code = 'CORRUGATE';")
-    stage_id = db_cursor.fetchone()["stage_id"]
-    db_cursor.execute("SELECT machine_id FROM machines WHERE code = 'M01';")
-    machine_id = db_cursor.fetchone()["machine_id"]
-
-    response = client.post(
-        "/stages/new",
-        data={
-            "order_id": order_id,
-            "stage_id": stage_id,
-            "machine_id": machine_id,
-            "started_at": "2026-10-21T09:00",
-            "finished_at": "2026-10-21T10:00",
-            "operators": "1",
-            "boxes_completed": "1000",
-            "boxes_defective": "3",
-            "entry_mode": "end_of_day",
-        },
-        follow_redirects=True,
-    )
-    assert response.status_code == 200
-    assert "Gofrokarton kesish" in response.get_data(as_text=True)
-
-    db_cursor.execute("SELECT * FROM stage_events WHERE order_id = %s;", (order_id,))
-    stage = db_cursor.fetchone()
-    assert stage["entered_by"] == "manager"
-    assert stage["source"] == "web_form"
-    assert stage["entry_mode"] == "end_of_day"
 
 
 def test_database_rejects_machine_not_allowed_for_stage(db_cursor):

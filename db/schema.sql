@@ -27,6 +27,14 @@ CREATE TABLE IF NOT EXISTS stage_machines (
     PRIMARY KEY (stage_id, machine_id)
 );
 
+-- The stages each box type goes through, in workshop order
+CREATE TABLE IF NOT EXISTS box_type_routes (
+    box_type_id INT NOT NULL REFERENCES box_types(box_type_id),
+    stage_id    INT NOT NULL REFERENCES stages(stage_id),
+    position    SMALLINT NOT NULL CHECK (position > 0),
+    PRIMARY KEY (box_type_id, stage_id)
+);
+
 -- Users who can log in (passwords stored only as hashes)
 CREATE TABLE IF NOT EXISTS users (
     user_id       SERIAL PRIMARY KEY,
@@ -47,6 +55,8 @@ CREATE TABLE IF NOT EXISTS orders (
     received_at            TIMESTAMPTZ NOT NULL,
     promised_date          DATE,
     material_in_stock      BOOLEAN NOT NULL,
+    finishing              TEXT NOT NULL DEFAULT 'none'
+                           CHECK (finishing IN ('none', 'laminate', 'lacquer')),
     open_orders_at_receipt INT NOT NULL CHECK (open_orders_at_receipt >= 0),
     completed_at           TIMESTAMPTZ,
     completed_by           TEXT,
@@ -58,6 +68,8 @@ CREATE TABLE IF NOT EXISTS orders (
 
 -- Added after the first release: keep existing databases in step
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS completed_by TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS finishing TEXT NOT NULL DEFAULT 'none'
+    CHECK (finishing IN ('none', 'laminate', 'lacquer'));
 
 -- Production stage events
 CREATE TABLE IF NOT EXISTS stage_events (
@@ -86,3 +98,5 @@ CREATE TABLE IF NOT EXISTS stage_events (
 CREATE INDEX IF NOT EXISTS idx_stage_events_order   ON stage_events(order_id);
 CREATE INDEX IF NOT EXISTS idx_stage_events_started ON stage_events(started_at);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_orders_code_ci ON orders (UPPER(order_code));
+-- Each stage is recorded at most once per order
+CREATE UNIQUE INDEX IF NOT EXISTS uq_stage_per_order ON stage_events(order_id, stage_id);

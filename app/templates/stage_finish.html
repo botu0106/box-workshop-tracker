@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Bosqichni tugatish{% endblock %}
+
+{% macro err(name) %}
+  {% if errors.get(name) %}<div class="text-danger small mt-1">{{ errors[name] }}</div>{% endif %}
+{% endmacro %}
+
+{% block content %}
+<div style="max-width: 520px;">
+  <div class="small text-secondary">Buyurtma № {{ order.order_code }} · {{ order.quantity }} dona</div>
+  <h1 class="h4 mb-3">{{ stage.name }}: tugatish</h1>
+  <form method="post" class="d-grid gap-4">
+
+    <div>
+      <label class="form-label fw-semibold" for="boxes_completed">Tayyor qutilar</label>
+      <input id="boxes_completed" name="boxes_completed" type="text" inputmode="numeric" pattern="[0-9]*"
+             class="form-control form-control-lg" required value="{{ form.get('boxes_completed', '') }}">
+      {{ err('boxes_completed') }}
+    </div>
+
+    <div>
+      <label class="form-label fw-semibold" for="boxes_defective">Brak</label>
+      <div class="input-group input-group-lg">
+        <button type="button" class="btn btn-outline-secondary px-4" id="defect-minus" aria-label="Kamaytirish">−</button>
+        <input id="boxes_defective" name="boxes_defective" type="text" inputmode="numeric" pattern="[0-9]*"
+               class="form-control text-center fw-semibold" value="{{ form.get('boxes_defective', '0') }}">
+        <button type="button" class="btn btn-outline-secondary px-4" id="defect-plus" aria-label="Koʻpaytirish">+</button>
+      </div>
+      {{ err('boxes_defective') }}
+    </div>
+
+    <fieldset>
+      <legend class="form-label fw-semibold fs-6">Nechta kishi ishladi?</legend>
+      <div class="row g-2">
+        {% for value in ['1', '2'] %}
+        <div class="col-6">
+          <input type="radio" class="btn-check" name="operators" id="op-{{ value }}" value="{{ value }}"
+                 {% if form.get('operators') == value %}checked{% endif %}>
+          <label class="btn btn-outline-primary btn-tap w-100" for="op-{{ value }}">{{ value }} kishi</label>
+        </div>
+        {% endfor %}
+      </div>
+      {{ err('operators') }}
+    </fieldset>
+
+    <details {% if form.get('finished_at') or errors.get('finished_at') %}open{% endif %}>
+      <summary class="text-primary">Tugash vaqti: hozir. Oʻzgartirish</summary>
+      <div class="mt-3">
+        <label class="form-label" for="finished_at">Qachon tugadi?</label>
+        <input id="finished_at" name="finished_at" type="datetime-local" class="form-control"
+               value="{{ form.get('finished_at', '') }}">
+        {{ err('finished_at') }}
+      </div>
+    </details>
+
+    <button class="btn btn-success btn-lg py-3 fw-semibold">Saqlash</button>
+    <a class="btn btn-link" href="{{ url_for('main.order_detail', order_id=order.order_id) }}">Bekor qilish</a>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Minus / plus buttons for the defect count
+  const defectInput = document.getElementById("boxes_defective");
+  function changeDefects(step) {
+    const current = parseInt(defectInput.value, 10) || 0;
+    defectInput.value = Math.max(0, current + step);
+  }
+  document.getElementById("defect-minus").addEventListener("click", function () { changeDefects(-1); });
+  document.getElementById("defect-plus").addEventListener("click", function () { changeDefects(1); });
+</script>
+{% endblock %}

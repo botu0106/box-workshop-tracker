@@ -1,6 +1,21 @@
 from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
 
 MAX_QUANTITY = 10_000_000
+WORKSHOP_TZ = ZoneInfo("Asia/Tashkent")
+FINISHING_OPTIONS = ("none", "laminate", "lacquer")
+
+
+def local_now():
+    """Current workshop time without tzinfo (the hosting server runs on UTC)."""
+    return datetime.now(WORKSHOP_TZ).replace(tzinfo=None)
+
+
+def to_local(value):
+    """Convert a timestamp from the database to workshop time without tzinfo."""
+    if value is None:
+        return None
+    return value.astimezone(WORKSHOP_TZ).replace(tzinfo=None)
 
 
 def _parse_int(value):
@@ -28,9 +43,12 @@ def _parse_optional_count(form, field, label, errors):
     return value
 
 
-def validate_order(form, valid_box_type_ids, now=None):
-    """Check order form input. Returns (clean_data, errors)."""
-    now = now or datetime.now()
+def validate_order(form, valid_box_type_ids, finishing_box_type_ids=frozenset(), now=None):
+    """Check order form input. Returns (clean_data, errors).
+
+    finishing_box_type_ids: box types that may have lamination or lacquer.
+    """
+    now = now or local_now()
     errors = {}
     data = {}
 
@@ -53,8 +71,11 @@ def validate_order(form, valid_box_type_ids, now=None):
         errors["quantity"] = f"Soni {MAX_QUANTITY:,} dan oshmasligi kerak."
     data["quantity"] = quantity
 
-    received_at = _parse_datetime(form.get("received_at"))
-    if received_at is None:
+    received_raw = form.get("received_at") or ""
+    received_at = _parse_datetime(received_raw)
+    if received_raw == "":
+        errors["received_at"] = "Buyurtma qabul qilingan vaqtni kiriting."
+    elif received_at is None:
         errors["received_at"] = "Toʻgʻri sana va vaqtni kiriting."
     elif received_at > now + timedelta(minutes=5):
         errors["received_at"] = "Qabul qilingan vaqt kelajakda boʻlishi mumkin emas."
@@ -71,6 +92,13 @@ def validate_order(form, valid_box_type_ids, now=None):
             errors["promised_date"] = "Vaʼda qilingan sana qabul qilingan sanadan oldin boʻlishi mumkin emas."
     data["promised_date"] = promised
 
+    finishing = form.get("finishing") or "none"
+    if finishing not in FINISHING_OPTIONS:
+        errors["finishing"] = "Pardoz turini tanlang."
+    elif box_type_id not in finishing_box_type_ids:
+        finishing = "none"  # plain and stencil boxes have no lamination or lacquer
+    data["finishing"] = finishing
+
     stock = form.get("material_in_stock")
     if stock not in ("yes", "no"):
         errors["material_in_stock"] = "Xomashyo omborda bor-yoʻqligini belgilang."
@@ -84,15 +112,75 @@ def validate_order(form, valid_box_type_ids, now=None):
     return data, errors
 
 
+def validate_stage_start(form, received_at, now=None):
+    """Check the optional start time of a stage. Returns (started_at, error)."""
+    now = now or local_now()
+    raw = form.get("started_at") or ""
+    if raw == "":
+        return now, None
+    started_at = _parse_datetime(raw)
+    if started_at is None:
+        return None, "Boshlanish sana va vaqtini toʻgʻri kiriting."
+    if started_at > now + timedelta(minutes=5):
+        return None, "Boshlanish vaqti kelajakda boʻlishi mumkin emas."
+    if started_at < received_at:
+        return None, "Bosqich buyurtma qabul qilinishidan oldin boshlanishi mumkin emas."
+    return started_at, None
+
+
+def validate_stage_finish(form, started_at, quantity, now=None):
+    """Check the finish form of a stage. Returns (clean_data, errors).
+
+    An empty finish time means the stage finished now; an empty defect count means 0.
+    """
+    now = now or local_now()
+    errors = {}
+
+    completed = _parse_int(form.get("boxes_completed"))
+    if completed is None or completed < 0:
+        errors["boxes_completed"] = "Tayyor qutilar soni 0 yoki undan katta butun son boʻlishi kerak."
+    elif completed > quantity:
+        errors["boxes_completed"] = f"Tayyor qutilar buyurtmadagi sondan ({quantity}) koʻp boʻlishi mumkin emas."
+
+    defective = _parse_int(form.get("boxes_defective") or "0")
+    if defective is None or defective < 0:
+        errors["boxes_defective"] = "Brak qutilar soni 0 yoki undan katta butun son boʻlishi kerak."
+    elif completed is not None and "boxes_completed" not in errors and defective > completed:
+        errors["boxes_defective"] = "Brak qutilar soni tayyor qutilardan koʻp boʻlishi mumkin emas."
+
+    operators = None
+    if form.get("operators"):
+        operators = _parse_int(form.get("operators"))
+        if operators not in (1, 2):
+            errors["operators"] = "Operatorlar soni 1 yoki 2 boʻlishi kerak."
+
+    raw = form.get("finished_at") or ""
+    finished_at = now if raw == "" else _parse_datetime(raw)
+    if finished_at is None:
+        errors["finished_at"] = "Tugash sana va vaqtini toʻgʻri kiriting."
+    elif finished_at > now + timedelta(minutes=5):
+        errors["finished_at"] = "Tugash vaqti kelajakda boʻlishi mumkin emas."
+    elif finished_at <= started_at:
+        errors["finished_at"] = "Tugash vaqti boshlanish vaqtidan keyin boʻlishi kerak."
+
+    data = {
+        "boxes_completed": completed,
+        "boxes_defective": defective,
+        "operators": operators,
+        "finished_at": finished_at,
+    }
+    return data, errors
+
+
 def validate_stage_event(form, orders, valid_stage_ids, valid_machine_ids,
                          allowed_pairs=None, now=None):
-    """Check stage event input.
+    """Check a full stage record (used when correcting a stage on its edit page).
 
     orders: dict {order_id: received_at} for orders that are still open.
     allowed_pairs: set of (stage_id, machine_id) that are permitted.
     Returns (clean_data, errors).
     """
-    now = now or datetime.now()
+    now = now or local_now()
     errors = {}
     data = {}
 

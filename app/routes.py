@@ -1,13 +1,30 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import psycopg2
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, g
 
 from .auth import login_required
 from .db import get_db
-from .validation import validate_order, validate_stage_event
+from .validation import (
+    local_now, to_local,
+    validate_order, validate_stage_event, validate_stage_start, validate_stage_finish,
+)
 
 bp = Blueprint("main", __name__)
+
+# Box types that may get lamination or lacquer, and the stage each choice adds
+FINISHING_BOX_TYPES = {"OFFSET", "MICRO"}
+FINISHING_STAGES = {"laminate": "LAMINATE", "lacquer": "LACQUER"}
+FINISHING_LABELS = {"none": "Pardozsiz", "laminate": "Laminatsiya", "lacquer": "Lak"}
+
+# A start or finish recorded this long after it happened counts as a late entry
+LATE_ENTRY = timedelta(minutes=15)
+
+ORDER_SELECT = """
+    SELECT o.*, b.name AS box_type, b.code AS box_code
+    FROM orders o
+    JOIN box_types b ON b.box_type_id = o.box_type_id
+"""
 
 
 # ---------- Helpers ----------
@@ -15,21 +32,6 @@ bp = Blueprint("main", __name__)
 def get_box_types():
     cur = get_db().cursor()
     cur.execute("SELECT box_type_id, code, name FROM box_types ORDER BY box_type_id;")
-    return cur.fetchall()
-
-
-def get_open_orders():
-    cur = get_db().cursor()
-    cur.execute(
-        "SELECT order_id, order_code, received_at FROM orders "
-        "WHERE completed_at IS NULL ORDER BY received_at DESC;"
-    )
-    return cur.fetchall()
-
-
-def get_stages():
-    cur = get_db().cursor()
-    cur.execute("SELECT stage_id, code, name FROM stages ORDER BY stage_id;")
     return cur.fetchall()
 
 
@@ -47,9 +49,78 @@ def get_stage_machine_pairs():
     return cur.fetchall()
 
 
+def get_order(order_id):
+    cur = get_db().cursor()
+    cur.execute(ORDER_SELECT + " WHERE o.order_id = %s;", (order_id,))
+    order = cur.fetchone()
+    if order is None:
+        abort(404)
+    return order
+
+
+def get_route(order):
+    """The order's stages in workshop order, each with its recorded event (if any).
+
+    Lamination and lacquering appear only when the client chose them.
+    """
+    cur = get_db().cursor()
+    cur.execute(
+        """
+        SELECT s.stage_id, s.code, s.name, r.position,
+               se.stage_event_id, se.started_at, se.finished_at,
+               se.boxes_completed, se.boxes_defective, se.operators,
+               m.code AS machine_code
+        FROM box_type_routes r
+        JOIN stages s ON s.stage_id = r.stage_id
+        LEFT JOIN stage_events se ON se.stage_id = r.stage_id AND se.order_id = %s
+        LEFT JOIN machines m ON m.machine_id = se.machine_id
+        WHERE r.box_type_id = %s
+        ORDER BY r.position;
+        """,
+        (order["order_id"], order["box_type_id"]),
+    )
+    skipped = {code for choice, code in FINISHING_STAGES.items() if choice != order["finishing"]}
+    return [stage for stage in cur.fetchall() if stage["code"] not in skipped]
+
+
+def find_stage(route, stage_id):
+    for stage in route:
+        if stage["stage_id"] == stage_id:
+            return stage
+    abort(404)
+
+
+def single_machine_for(stage_id):
+    """The machine of a stage when exactly one machine can do it, else None."""
+    machines = [p["machine_id"] for p in get_stage_machine_pairs() if p["stage_id"] == stage_id]
+    return machines[0] if len(machines) == 1 else None
+
+
+def complete_if_all_finished(conn, order):
+    """Mark the order completed when every stage of its route is finished."""
+    route = get_route(order)
+    if not route or not all(stage["finished_at"] for stage in route):
+        return False
+    last_finish = max(stage["finished_at"] for stage in route)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE orders SET completed_at = %s, completed_by = %s
+            WHERE order_id = %s AND completed_at IS NULL;
+            """,
+            (last_finish, g.user["username"], order["order_id"]),
+        )
+    conn.commit()
+    return True
+
+
 def to_input_datetime(value):
-    """Format a DB timestamp for an <input type="datetime-local">."""
-    return value.strftime("%Y-%m-%dT%H:%M") if value else ""
+    """Format a timestamp for an <input type="datetime-local">."""
+    return to_local(value).strftime("%Y-%m-%dT%H:%M") if value else ""
+
+
+def now_input():
+    return local_now().strftime("%Y-%m-%dT%H:%M")
 
 
 def form_with_user():
@@ -80,33 +151,41 @@ def index():
 @login_required
 def list_orders():
     cur = get_db().cursor()
+    cur.execute(ORDER_SELECT + " WHERE o.completed_at IS NULL ORDER BY o.received_at;")
+    open_rows = cur.fetchall()
     cur.execute(
-        """
-        SELECT o.order_id, o.order_code, b.name AS box_type, o.quantity,
-               o.received_at, o.promised_date, o.completed_at, o.entered_by,
-               (SELECT COUNT(*) FROM stage_events se
-                 WHERE se.order_id = o.order_id) AS stage_count,
-               (SELECT s.name FROM stage_events se JOIN stages s USING (stage_id)
-                 WHERE se.order_id = o.order_id
-                 ORDER BY se.started_at DESC LIMIT 1) AS last_stage
-        FROM orders o
-        JOIN box_types b ON b.box_type_id = o.box_type_id
-        ORDER BY o.created_at DESC;
-        """
+        ORDER_SELECT
+        + " WHERE o.completed_at >= now() - INTERVAL '3 days' ORDER BY o.completed_at DESC;"
     )
-    return render_template("orders.html", orders=cur.fetchall())
+    recent = cur.fetchall()
+
+    open_orders = []
+    for order in open_rows:
+        route = get_route(order)
+        done = sum(1 for stage in route if stage["finished_at"])
+        open_orders.append({
+            **order,
+            "total": len(route),
+            "done": done,
+            "percent": round(100 * done / len(route)) if route else 0,
+            "running": [s["name"] for s in route if s["started_at"] and not s["finished_at"]],
+            "next_up": next((s["name"] for s in route if not s["started_at"]), None),
+        })
+
+    return render_template("orders.html", open_orders=open_orders, recent=recent)
 
 
 @bp.route("/orders/new", methods=["GET", "POST"])
 @login_required
 def new_order():
     box_types = get_box_types()
+    finishing_ids = {b["box_type_id"] for b in box_types if b["code"] in FINISHING_BOX_TYPES}
     errors, form = {}, {}
 
     if request.method == "POST":
         form = form_with_user()
         valid_ids = {b["box_type_id"] for b in box_types}
-        data, errors = validate_order(form, valid_ids)
+        data, errors = validate_order(form, valid_ids, finishing_ids)
 
         if not errors:
             conn = get_db()
@@ -116,12 +195,12 @@ def new_order():
                         """
                         INSERT INTO orders (
                             order_code, box_type_id, quantity, received_at,
-                            promised_date, material_in_stock,
+                            promised_date, material_in_stock, finishing,
                             open_orders_at_receipt, entered_by, source
                         )
                         VALUES (
                             %(order_code)s, %(box_type_id)s, %(quantity)s, %(received_at)s,
-                            %(promised_date)s, %(material_in_stock)s,
+                            %(promised_date)s, %(material_in_stock)s, %(finishing)s,
                             (SELECT COUNT(*) FROM orders
                              WHERE received_at <= %(received_at)s
                                AND (completed_at IS NULL OR completed_at > %(received_at)s)),
@@ -131,116 +210,31 @@ def new_order():
                         """,
                         data,
                     )
-                    cur.fetchone()
+                    new_id = cur.fetchone()["order_id"]
                 conn.commit()
-                flash(f"{data['order_code']} raqamli buyurtma saqlandi.", "success")
-                return redirect(url_for("main.list_orders"))
+                flash(f"№ {data['order_code']} buyurtma saqlandi.", "success")
+                return redirect(url_for("main.order_detail", order_id=new_id))
             except psycopg2.errors.UniqueViolation:
                 conn.rollback()
                 errors["order_code"] = "Bunday raqamli buyurtma allaqachon mavjud."
 
-    return render_template("order_form.html", box_types=box_types, errors=errors, form=form)
+    finishing_codes = sorted(FINISHING_BOX_TYPES)
+    return render_template(
+        "order_form.html",
+        box_types=box_types, finishing_codes=finishing_codes, errors=errors, form=form,
+    )
 
 
 @bp.route("/orders/<int:order_id>")
 @login_required
 def order_detail(order_id):
-    cur = get_db().cursor()
-    cur.execute(
-        """
-        SELECT o.*, b.name AS box_type
-        FROM orders o JOIN box_types b USING (box_type_id)
-        WHERE o.order_id = %s;
-        """,
-        (order_id,),
-    )
-    order = cur.fetchone()
-    if order is None:
-        abort(404)
-
-    cur.execute(
-        """
-        SELECT se.*, s.name AS stage_name, m.code AS machine_code
-        FROM stage_events se
-        JOIN stages s USING (stage_id)
-        LEFT JOIN machines m USING (machine_id)
-        WHERE se.order_id = %s
-        ORDER BY se.started_at;
-        """,
-        (order_id,),
-    )
-    stages = cur.fetchall()
-
-    # Suggested completion time: when the last stage finished, otherwise now
-    finished_times = [s["finished_at"] for s in stages if s["finished_at"]]
-    has_open_stage = any(s["finished_at"] is None for s in stages)
-    if finished_times:
-        default_completed = to_input_datetime(max(finished_times))
-    else:
-        default_completed = datetime.now().strftime("%Y-%m-%dT%H:%M")
-
+    order = get_order(order_id)
     return render_template(
         "order_detail.html",
-        order=order, stages=stages,
-        has_open_stage=has_open_stage, default_completed=default_completed,
+        order=order,
+        route=get_route(order),
+        finishing_label=FINISHING_LABELS[order["finishing"]],
     )
-
-
-@bp.route("/orders/<int:order_id>/complete", methods=["POST"])
-@login_required
-def complete_order(order_id):
-    conn = get_db()
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT received_at, completed_at FROM orders WHERE order_id = %s;",
-            (order_id,),
-        )
-        order = cur.fetchone()
-        if order is None:
-            abort(404)
-        cur.execute(
-            """
-            SELECT COUNT(*) FILTER (WHERE finished_at IS NULL) AS open_stages,
-                   MAX(finished_at) AS last_finished
-            FROM stage_events WHERE order_id = %s;
-            """,
-            (order_id,),
-        )
-        info = cur.fetchone()
-
-    error = None
-    completed_at = None
-    try:
-        completed_at = datetime.fromisoformat(request.form.get("completed_at") or "")
-    except ValueError:
-        error = "Toʻgʻri sana va vaqtni kiriting."
-
-    if error is None:
-        received = order["received_at"].replace(tzinfo=None)
-        last_finished = info["last_finished"].replace(tzinfo=None) if info["last_finished"] else None
-        if order["completed_at"] is not None:
-            error = "Bu buyurtma allaqachon tayyor deb belgilangan."
-        elif info["open_stages"] > 0:
-            error = "Tugallanmagan bosqichlar bor. Avval ularni yakunlang."
-        elif completed_at > datetime.now() + timedelta(minutes=5):
-            error = "Tayyor boʻlgan vaqt kelajakda boʻlishi mumkin emas."
-        elif completed_at < received:
-            error = "Tayyor boʻlgan vaqt qabul qilingan vaqtdan oldin boʻlishi mumkin emas."
-        elif last_finished and completed_at < last_finished:
-            error = "Tayyor boʻlgan vaqt oxirgi bosqich tugashidan oldin boʻlishi mumkin emas."
-
-    if error:
-        flash(error, "danger")
-        return redirect(url_for("main.order_detail", order_id=order_id))
-
-    with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE orders SET completed_at = %s, completed_by = %s WHERE order_id = %s;",
-            (completed_at, g.user["username"], order_id),
-        )
-    conn.commit()
-    flash("Buyurtma tayyor deb belgilandi.", "success")
-    return redirect(url_for("main.order_detail", order_id=order_id))
 
 
 @bp.route("/orders/<int:order_id>/reopen", methods=["POST"])
@@ -263,73 +257,100 @@ def reopen_order(order_id):
     return redirect(url_for("main.order_detail", order_id=order_id))
 
 
-# ---------- Stage events ----------
+# ---------- Stages: start and finish ----------
 
-@bp.route("/stages/new", methods=["GET", "POST"])
+@bp.route("/orders/<int:order_id>/stages/<int:stage_id>/start", methods=["GET", "POST"])
 @login_required
-def new_stage_event():
-    orders = get_open_orders()
-    stages = get_stages()
-    machines = get_machines()
+def start_stage(order_id, stage_id):
+    order = get_order(order_id)
+    stage = find_stage(get_route(order), stage_id)
+    back = url_for("main.order_detail", order_id=order_id)
 
-    pairs = get_stage_machine_pairs()
-    allowed_pairs = {(p["stage_id"], p["machine_id"]) for p in pairs}
-    stage_machines = {}
-    for p in pairs:
-        stage_machines.setdefault(p["stage_id"], []).append(p["machine_id"])
+    if order["completed_at"] or stage["started_at"]:
+        flash("Bu bosqich allaqachon boshlangan.", "warning")
+        return redirect(back)
+
+    if request.method == "GET":
+        return render_template("stage_start.html", order=order, stage=stage, now_str=now_input())
+
+    now = local_now()
+    started_at, error = validate_stage_start(request.form, to_local(order["received_at"]), now)
+    if error:
+        flash(error, "danger")
+        return redirect(back)
+
+    conn = get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO stage_events (
+                    order_id, stage_id, machine_id, started_at, entry_mode, entered_by, source
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, 'web_form');
+                """,
+                (
+                    order_id, stage_id, single_machine_for(stage_id), started_at,
+                    "realtime" if now - started_at <= LATE_ENTRY else "end_of_day",
+                    g.user["username"],
+                ),
+            )
+        conn.commit()
+    except psycopg2.errors.UniqueViolation:
+        conn.rollback()
+        flash("Bu bosqich allaqachon boshlangan.", "warning")
+    return redirect(back)
+
+
+@bp.route("/orders/<int:order_id>/stages/<int:stage_id>/finish", methods=["GET", "POST"])
+@login_required
+def finish_stage(order_id, stage_id):
+    order = get_order(order_id)
+    stage = find_stage(get_route(order), stage_id)
+    back = url_for("main.order_detail", order_id=order_id)
+
+    if not stage["started_at"] or stage["finished_at"]:
+        flash("Bu bosqichni hozir tugatib boʻlmaydi.", "warning")
+        return redirect(back)
 
     errors = {}
-    form = request.args  # allows ?order_id=5 to pre-select an order
-    now_str = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    form = {"boxes_completed": str(order["quantity"]), "boxes_defective": "0"}
 
     if request.method == "POST":
-        form = form_with_user()
-        # DB returns timezone-aware times; drop tzinfo to compare with form input
-        order_map = {o["order_id"]: o["received_at"].replace(tzinfo=None) for o in orders}
-        data, errors = validate_stage_event(
-            form,
-            order_map,
-            {s["stage_id"] for s in stages},
-            {m["machine_id"] for m in machines},
-            allowed_pairs=allowed_pairs,
-        )
+        form = request.form.to_dict()
+        now = local_now()
+        data, errors = validate_stage_finish(form, to_local(stage["started_at"]), order["quantity"], now)
 
         if not errors:
+            data["late"] = now - data["finished_at"] > LATE_ENTRY
+            data["stage_event_id"] = stage["stage_event_id"]
             conn = get_db()
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        INSERT INTO stage_events (
-                            order_id, stage_id, machine_id, started_at, finished_at,
-                            operators, boxes_completed, boxes_defective,
-                            entry_mode, entered_by, source
-                        )
-                        VALUES (
-                            %(order_id)s, %(stage_id)s, %(machine_id)s,
-                            %(started_at)s, %(finished_at)s, %(operators)s,
-                            %(boxes_completed)s, %(boxes_defective)s,
-                            %(entry_mode)s, %(entered_by)s, 'web_form'
-                        )
-                        RETURNING stage_event_id;
-                        """,
-                        data,
-                    )
-                    cur.fetchone()
-                conn.commit()
-                flash("Bosqich saqlandi.", "success")
-                return redirect(url_for("main.order_detail", order_id=data["order_id"]))
-            except psycopg2.IntegrityError:
-                conn.rollback()
-                flash("Maʼlumotlar bazasi bu yozuvni qabul qilmadi. Qiymatlarni tekshiring.", "danger")
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE stage_events
+                    SET finished_at     = %(finished_at)s,
+                        boxes_completed = %(boxes_completed)s,
+                        boxes_defective = %(boxes_defective)s,
+                        operators       = %(operators)s,
+                        entry_mode      = CASE WHEN %(late)s THEN 'end_of_day' ELSE entry_mode END
+                    WHERE stage_event_id = %(stage_event_id)s;
+                    """,
+                    data,
+                )
+            conn.commit()
+            if complete_if_all_finished(conn, order):
+                flash(f"Barcha bosqichlar tugadi. № {order['order_code']} buyurtma tayyor!", "success")
+            else:
+                flash(f"{stage['name']}: tugatildi.", "success")
+            return redirect(back)
 
     return render_template(
-        "stage_form.html",
-        orders=orders, stages=stages, machines=machines,
-        stage_machines=stage_machines,
-        errors=errors, form=form, now_str=now_str,
+        "stage_finish.html", order=order, stage=stage, errors=errors, form=form,
     )
 
+
+# ---------- Stages: correcting a recorded stage ----------
 
 @bp.route("/stages/<int:stage_event_id>/edit", methods=["GET", "POST"])
 @login_required
@@ -366,7 +387,7 @@ def edit_stage_event(stage_event_id):
 
         data, errors = validate_stage_event(
             form,
-            {stage["order_id"]: stage["order_received_at"].replace(tzinfo=None)},
+            {stage["order_id"]: to_local(stage["order_received_at"])},
             {stage["stage_id"]},
             {m["machine_id"] for m in machines},
             allowed_pairs=allowed_pairs,

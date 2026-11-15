@@ -65,3 +65,45 @@ FROM (VALUES
 JOIN stages s   ON s.code = pairs.stage_code
 JOIN machines m ON m.code = pairs.machine_code
 ON CONFLICT DO NOTHING;
+
+-- Route of each box type. Lamination and lacquering are listed for colour and micro boxes,
+-- but an order only shows the one the client chose (or neither).
+-- Drying after stencil printing happens only for hand printing, so it is not in the route.
+INSERT INTO box_type_routes (box_type_id, stage_id, position)
+SELECT b.box_type_id, s.stage_id, r.position
+FROM (VALUES
+    ('PLAIN',   'CORRUGATE', 1),
+    ('PLAIN',   'MOUNT',     2),
+    ('PLAIN',   'PRESS',     3),
+    ('PLAIN',   'DIECUT',    4),
+    ('PLAIN',   'GLUING',    5),
+
+    ('STENCIL', 'CORRUGATE', 1),
+    ('STENCIL', 'MOUNT',     2),
+    ('STENCIL', 'PRESS',     3),
+    ('STENCIL', 'STENCIL',   4),
+    ('STENCIL', 'DIECUT',    5),
+    ('STENCIL', 'GLUING',    6),
+
+    ('OFFSET',  'PAPERCUT',  1),
+    ('OFFSET',  'OFFSET',    2),
+    ('OFFSET',  'DRYING',    3),
+    ('OFFSET',  'LAMINATE',  4),
+    ('OFFSET',  'LACQUER',   5),
+    ('OFFSET',  'CORRUGATE', 6),
+    ('OFFSET',  'MOUNT',     7),
+    ('OFFSET',  'PRESS',     8),
+    ('OFFSET',  'DIECUT',    9),
+    ('OFFSET',  'GLUING',    10),
+
+    ('MICRO',   'PAPERCUT',  1),
+    ('MICRO',   'OFFSET',    2),
+    ('MICRO',   'DRYING',    3),
+    ('MICRO',   'LAMINATE',  4),
+    ('MICRO',   'LACQUER',   5),
+    ('MICRO',   'DIECUT',    6),
+    ('MICRO',   'GLUING',    7)
+) AS r(box_code, stage_code, position)
+JOIN box_types b ON b.code = r.box_code
+JOIN stages s    ON s.code = r.stage_code
+ON CONFLICT (box_type_id, stage_id) DO UPDATE SET position = EXCLUDED.position;

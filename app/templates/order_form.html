@@ -2,93 +2,121 @@
 {% block title %}Yangi buyurtma{% endblock %}
 
 {% macro err(name) %}
-  {% if errors.get(name) %}<div class="text-danger small">{{ errors[name] }}</div>{% endif %}
+  {% if errors.get(name) %}<div class="text-danger small mt-1">{{ errors[name] }}</div>{% endif %}
 {% endmacro %}
 
 {% block content %}
-<h1 class="h3 mb-3">Yangi buyurtma</h1>
-<form method="post" class="row g-3">
+<h1 class="h4 mb-3">Yangi buyurtma</h1>
+<form method="post" class="d-grid gap-4" style="max-width: 640px;">
 
-  <div class="col-12 col-md-6">
-    <label class="form-label">Buyurtma raqami</label>
-    <input name="order_code" class="form-control" maxlength="30" required
-           placeholder="masalan, 115"
-           value="{{ form.get('order_code', '') }}">
-    <div class="form-text">Sexdagi buyurtma raqamini yozing. Mijoz nomini yozmang.</div>
+  <div>
+    <label class="form-label fw-semibold" for="order_code">Buyurtma raqami</label>
+    <input id="order_code" name="order_code" class="form-control form-control-lg" maxlength="30" required
+           placeholder="masalan, 115" value="{{ form.get('order_code', '') }}">
+    <div class="form-text">Sexdagi buyurtma raqami. Mijoz nomini yozmang.</div>
     {{ err('order_code') }}
   </div>
 
-  <div class="col-12 col-md-6">
-    <label class="form-label">Quti turi</label>
-    <select name="box_type_id" class="form-select" required>
-      <option value="">Tanlang...</option>
+  <fieldset>
+    <legend class="form-label fw-semibold fs-6">Quti turi</legend>
+    <div class="row g-2">
       {% for b in box_types %}
-        <option value="{{ b.box_type_id }}"
-          {% if form.get('box_type_id') == b.box_type_id|string %}selected{% endif %}>
-          {{ b.name }}
-        </option>
+      <div class="col-6">
+        <input type="radio" class="btn-check" name="box_type_id" id="bt{{ b.box_type_id }}"
+               value="{{ b.box_type_id }}" data-code="{{ b.code }}" required
+               {% if form.get('box_type_id') == b.box_type_id|string %}checked{% endif %}>
+        <label class="btn btn-outline-primary btn-tap w-100" for="bt{{ b.box_type_id }}">{{ b.name }}</label>
+      </div>
       {% endfor %}
-    </select>
-    {{ err('box_type_id') }}
-  </div>
-
-  <div class="col-12 col-md-6">
-    <label class="form-label">Soni (dona quti)</label>
-    <input name="quantity" id="quantity" type="text" inputmode="numeric" pattern="[0-9]*"
-           class="form-control" required
-           value="{{ form.get('quantity', '') }}">
-    <div class="d-flex gap-2 mt-2">
-      <button type="button" class="btn btn-sm btn-outline-secondary qty-preset" data-qty="1000">1000</button>
-      <button type="button" class="btn btn-sm btn-outline-secondary qty-preset" data-qty="1500">1500</button>
-      <button type="button" class="btn btn-sm btn-outline-secondary qty-preset" data-qty="2000">2000</button>
     </div>
+    {{ err('box_type_id') }}
+  </fieldset>
+
+  <div>
+    <label class="form-label fw-semibold" for="quantity">Soni (dona)</label>
+    <div class="row g-2 mb-2">
+      {% for preset in [1000, 1500, 2000] %}
+      <div class="col-4">
+        <button type="button" class="btn btn-outline-secondary btn-tap w-100 qty-preset" data-qty="{{ preset }}">{{ preset }}</button>
+      </div>
+      {% endfor %}
+    </div>
+    <input id="quantity" name="quantity" type="text" inputmode="numeric" pattern="[0-9]*"
+           class="form-control form-control-lg" required value="{{ form.get('quantity', '') }}">
     {{ err('quantity') }}
   </div>
 
-  <div class="col-12 col-md-6">
-    <label class="form-label">Qabul qilingan vaqt</label>
-    <input name="received_at" type="datetime-local" class="form-control" required
-           value="{{ form.get('received_at', '') }}">
+  <fieldset id="finishing-group">
+    <legend class="form-label fw-semibold fs-6">Pardoz (mijoz xohishi)</legend>
+    <div class="row g-2">
+      {% for value, label in [('none', 'Yoʻq'), ('laminate', 'Laminatsiya'), ('lacquer', 'Lak')] %}
+      <div class="col-4">
+        <input type="radio" class="btn-check" name="finishing" id="fin-{{ value }}" value="{{ value }}"
+               {% if form.get('finishing', 'none') == value %}checked{% endif %}>
+        <label class="btn btn-outline-primary btn-tap w-100" for="fin-{{ value }}">{{ label }}</label>
+      </div>
+      {% endfor %}
+    </div>
+    {{ err('finishing') }}
+  </fieldset>
+
+  <fieldset>
+    <legend class="form-label fw-semibold fs-6">Xomashyo omborda bormi?</legend>
+    <div class="row g-2">
+      {% for value, label in [('yes', 'Ha'), ('no', 'Yoʻq')] %}
+      <div class="col-6">
+        <input type="radio" class="btn-check" name="material_in_stock" id="stock-{{ value }}" value="{{ value }}" required
+               {% if form.get('material_in_stock') == value %}checked{% endif %}>
+        <label class="btn btn-outline-primary btn-tap w-100" for="stock-{{ value }}">{{ label }}</label>
+      </div>
+      {% endfor %}
+    </div>
+    {{ err('material_in_stock') }}
+  </fieldset>
+
+  <div>
+    <label class="form-label fw-semibold" for="received_at">Buyurtma qachon qabul qilingan?</label>
+    <input id="received_at" name="received_at" type="datetime-local" class="form-control form-control-lg"
+           required value="{{ form.get('received_at', '') }}">
     {{ err('received_at') }}
   </div>
 
-  <div class="col-12 col-md-6">
-    <label class="form-label">Vaʼda qilingan sana (ixtiyoriy)</label>
-    <input name="promised_date" type="date" class="form-control"
-           value="{{ form.get('promised_date', '') }}">
-    {{ err('promised_date') }}
-  </div>
-
-  <div class="col-12 col-md-6">
-    <label class="form-label d-block">Xomashyo omborda bormi?</label>
-    <div class="form-check form-check-inline">
-      <input class="form-check-input" type="radio" name="material_in_stock" value="yes" required
-        {% if form.get('material_in_stock') == 'yes' %}checked{% endif %}>
-      <label class="form-check-label">Ha</label>
+  <details {% if form.get('promised_date') or errors.get('promised_date') %}open{% endif %}>
+    <summary class="text-primary">Vaʼda qilingan sana (ixtiyoriy)</summary>
+    <div class="mt-3">
+      <label class="form-label" for="promised_date">Vaʼda qilingan sana</label>
+      <input id="promised_date" name="promised_date" type="date" class="form-control"
+             value="{{ form.get('promised_date', '') }}">
+      {{ err('promised_date') }}
     </div>
-    <div class="form-check form-check-inline">
-      <input class="form-check-input" type="radio" name="material_in_stock" value="no"
-        {% if form.get('material_in_stock') == 'no' %}checked{% endif %}>
-      <label class="form-check-label">Yoʻq</label>
-    </div>
-    {{ err('material_in_stock') }}
-  </div>
+  </details>
 
-  <div class="col-12">
-    <button class="btn btn-primary">Buyurtmani saqlash</button>
-  </div>
+  <button class="btn btn-primary btn-lg py-3 fw-semibold">Saqlash</button>
 </form>
 {% endblock %}
 
 {% block scripts %}
 <script>
-  // Quick quantity buttons: fill the field with a common order size
+  // Quick quantity buttons
   const quantityInput = document.getElementById("quantity");
   document.querySelectorAll(".qty-preset").forEach(function (btn) {
     btn.addEventListener("click", function () {
       quantityInput.value = btn.dataset.qty;
-      quantityInput.focus();
     });
   });
+
+  // Lamination / lacquer is only offered for colour and micro boxes
+  const finishingCodes = {{ finishing_codes|tojson }};
+  const finishingGroup = document.getElementById("finishing-group");
+  function updateFinishing() {
+    const picked = document.querySelector('input[name="box_type_id"]:checked');
+    const show = picked !== null && finishingCodes.includes(picked.dataset.code);
+    finishingGroup.hidden = !show;
+    if (!show) document.getElementById("fin-none").checked = true;
+  }
+  document.querySelectorAll('input[name="box_type_id"]').forEach(function (input) {
+    input.addEventListener("change", updateFinishing);
+  });
+  updateFinishing();
 </script>
 {% endblock %}

@@ -1,105 +1,76 @@
 {% extends "base.html" %}
 {% block title %}Buyurtma {{ order.order_code }}{% endblock %}
 {% block content %}
-<h1 class="h3 mb-3">Buyurtma {{ order.order_code }}</h1>
+<div class="mb-3">
+  <a href="{{ url_for('main.list_orders') }}" class="small">← Buyurtmalar</a>
+  <h1 class="h4 mt-2 mb-1">Buyurtma № {{ order.order_code }}</h1>
+  <div class="text-secondary">
+    {{ order.box_type }} · {{ order.quantity }} dona
+    {% if order.box_code in ['OFFSET', 'MICRO'] %} · {{ finishing_label }}{% endif %}
+    · xomashyo {{ 'bor' if order.material_in_stock else 'yoʻq' }}
+  </div>
+</div>
 
-<div class="card mb-3">
-  <div class="card-body">
-    <div class="row g-2 small">
-      <div class="col-6 col-md-3"><strong>Quti turi:</strong> {{ order.box_type }}</div>
-      <div class="col-6 col-md-3"><strong>Soni:</strong> {{ order.quantity }}</div>
-      <div class="col-6 col-md-3"><strong>Qabul qilingan:</strong> {{ order.received_at.strftime('%d.%m.%Y %H:%M') }}</div>
-      <div class="col-6 col-md-3"><strong>Vaʼda sanasi:</strong> {{ order.promised_date.strftime('%d.%m.%Y') if order.promised_date else '—' }}</div>
-      <div class="col-6 col-md-3"><strong>Xomashyo:</strong> {{ 'Omborda bor' if order.material_in_stock else 'Omborda yoʻq' }}</div>
-      <div class="col-6 col-md-3"><strong>Qabul paytida ochiq buyurtmalar:</strong> {{ order.open_orders_at_receipt }}</div>
-      <div class="col-6 col-md-3"><strong>Kiritgan:</strong> {{ order.entered_by }} ({{ order.source }})</div>
-      <div class="col-6 col-md-3"><strong>Kiritilgan vaqt:</strong> {{ order.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+{% if order.completed_at %}
+<div class="alert alert-success d-flex flex-wrap justify-content-between align-items-center gap-2">
+  <span><strong>Tayyor:</strong> {{ order.completed_at.strftime('%d.%m.%Y %H:%M') }}</span>
+  <form method="post" action="{{ url_for('main.reopen_order', order_id=order.order_id) }}"
+        onsubmit="return confirm('Buyurtmani qayta ochmoqchimisiz?');">
+    <button class="btn btn-sm btn-outline-secondary">Qayta ochish</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="row g-4">
+  <div class="col-12 col-lg-8">
+    <ol class="list-unstyled d-grid gap-2 mb-0">
+      {% for s in route %}
+      {% set running = s.started_at and not s.finished_at %}
+      <li class="card {% if running %}border-warning border-2 bg-warning-subtle{% endif %}">
+        <div class="card-body py-3 d-flex align-items-center gap-3">
+          <div class="flex-grow-1">
+            <div class="fw-semibold">
+              {% if s.finished_at %}<span class="text-success me-1" aria-hidden="true">✓</span>{% endif %}{{ s.name }}
+            </div>
+            <div class="small text-secondary">
+              {% if s.finished_at %}
+                {{ s.started_at.strftime('%d.%m %H:%M') }}–{{ s.finished_at.strftime('%H:%M') }}
+                · tayyor {{ s.boxes_completed }} · brak {{ s.boxes_defective or 0 }}
+              {% elif running %}
+                boshlandi {{ s.started_at.strftime('%d.%m %H:%M') }}
+              {% endif %}
+            </div>
+          </div>
+          {% if s.finished_at %}
+            <a class="btn btn-sm btn-link" href="{{ url_for('main.edit_stage_event', stage_event_id=s.stage_event_id) }}">Tahrirlash</a>
+          {% elif running %}
+            <a class="btn btn-dark btn-tap px-4" href="{{ url_for('main.finish_stage', order_id=order.order_id, stage_id=s.stage_id) }}">Tugatish</a>
+          {% elif not order.completed_at %}
+            <div class="d-flex flex-column align-items-end gap-1">
+              <form method="post" action="{{ url_for('main.start_stage', order_id=order.order_id, stage_id=s.stage_id) }}">
+                <button class="btn btn-primary btn-tap px-4">Boshlash</button>
+              </form>
+              <a class="small" href="{{ url_for('main.start_stage', order_id=order.order_id, stage_id=s.stage_id) }}">boshqa vaqt</a>
+            </div>
+          {% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ol>
+    {% if not order.completed_at %}
+    <p class="small text-secondary text-center mt-3">Oxirgi bosqich tugaganda buyurtma oʻzi «Tayyor» boʻladi.</p>
+    {% endif %}
+  </div>
+
+  <div class="col-12 col-lg-4">
+    <div class="card">
+      <div class="card-body small d-grid gap-1">
+        <div><strong>Qabul qilingan:</strong> {{ order.received_at.strftime('%d.%m.%Y %H:%M') }}</div>
+        <div><strong>Vaʼda sanasi:</strong> {{ order.promised_date.strftime('%d.%m.%Y') if order.promised_date else '—' }}</div>
+        <div><strong>Qabul paytida ochiq buyurtmalar:</strong> {{ order.open_orders_at_receipt }}</div>
+        <div><strong>Kiritgan:</strong> {{ order.entered_by }}, {{ order.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+      </div>
     </div>
   </div>
 </div>
-
-<div class="card mb-4">
-  <div class="card-body">
-    {% if order.completed_at %}
-      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-        <div>
-          <span class="badge bg-success me-2">Tayyor</span>
-          {{ order.completed_at.strftime('%d.%m.%Y %H:%M') }}
-          {% if order.completed_by %}<span class="text-muted small">({{ order.completed_by }})</span>{% endif %}
-        </div>
-        <form method="post" action="{{ url_for('main.reopen_order', order_id=order.order_id) }}"
-              onsubmit="return confirm('Buyurtmani qayta ochmoqchimisiz?');">
-          <button class="btn btn-sm btn-outline-secondary">Qayta ochish</button>
-        </form>
-      </div>
-    {% elif has_open_stage %}
-      <p class="mb-0 text-muted">Buyurtmani tayyor deb belgilash uchun avval barcha bosqichlarni yakunlang.</p>
-    {% else %}
-      <form method="post" action="{{ url_for('main.complete_order', order_id=order.order_id) }}"
-            class="row g-2 align-items-end">
-        <div class="col-12 col-md-5">
-          <label class="form-label">Tayyor boʻlgan vaqt</label>
-          <input name="completed_at" type="datetime-local" class="form-control" required
-                 value="{{ default_completed }}">
-        </div>
-        <div class="col-12 col-md-4">
-          <button class="btn btn-success w-100">Buyurtma tayyor</button>
-        </div>
-      </form>
-    {% endif %}
-  </div>
-</div>
-
-<div class="d-flex justify-content-between align-items-center mb-2">
-  <h2 class="h5 mb-0">Ishlab chiqarish bosqichlari</h2>
-  {% if not order.completed_at %}
-    <a class="btn btn-sm btn-primary" href="{{ url_for('main.new_stage_event', order_id=order.order_id) }}">+ Bosqich qoʻshish</a>
-  {% endif %}
-</div>
-
-{% if stages %}
-<div class="table-responsive">
-  <table class="table table-sm table-striped align-middle">
-    <thead>
-      <tr>
-        <th>Bosqich</th><th>Stanok</th><th>Boshlandi</th><th>Tugadi</th>
-        <th>Operatorlar</th><th>Tayyor</th><th>Brak</th>
-        <th>Kiritish usuli</th><th>Kiritildi</th><th>Oxirgi tahrir</th><th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for s in stages %}
-      <tr>
-        <td>{{ s.stage_name }}</td>
-        <td>{{ s.machine_code or '—' }}</td>
-        <td>{{ s.started_at.strftime('%d.%m %H:%M') }}</td>
-        <td>
-          {% if s.finished_at %}
-            {{ s.finished_at.strftime('%d.%m %H:%M') }}
-          {% else %}
-            <span class="badge bg-warning text-dark">Jarayonda</span>
-          {% endif %}
-        </td>
-        <td>{{ s.operators or '—' }}</td>
-        <td>{{ s.boxes_completed if s.boxes_completed is not none else '—' }}</td>
-        <td>{{ s.boxes_defective if s.boxes_defective is not none else '—' }}</td>
-        <td>{{ 'Kun oxirida' if s.entry_mode == 'end_of_day' else 'Jarayonda' }}</td>
-        <td class="small">{{ s.entered_by }}<br>{{ s.created_at.strftime('%d.%m %H:%M') }}</td>
-        <td class="small">
-          {% if s.updated_at %}
-            {{ s.updated_by }}<br>{{ s.updated_at.strftime('%d.%m %H:%M') }}
-          {% else %}—{% endif %}
-        </td>
-        <td>
-          <a class="btn btn-sm btn-outline-primary"
-             href="{{ url_for('main.edit_stage_event', stage_event_id=s.stage_event_id) }}">Tahrirlash</a>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% else %}
-<p class="text-muted">Hozircha bosqichlar kiritilmagan.</p>
-{% endif %}
 {% endblock %}
