@@ -2,14 +2,39 @@
 {% block title %}Buyurtma {{ order.order_code }}{% endblock %}
 {% block content %}
 <div class="mb-3">
-  <a href="{{ url_for('main.list_orders') }}" class="small">← Buyurtmalar</a>
-  <h1 class="h4 mt-2 mb-1">Buyurtma № {{ order.order_code }}</h1>
+  <div class="d-flex flex-wrap justify-content-between gap-2 mb-3">
+    <a class="btn btn-outline-secondary" href="{{ url_for('main.list_orders') }}">← Buyurtmalar</a>
+    <a class="btn btn-outline-primary" href="{{ url_for('main.edit_order', order_id=order.order_id) }}">Buyurtmani tahrirlash</a>
+  </div>
+  <h1 class="h4 mb-1">Buyurtma № {{ order.order_code }}</h1>
   <div class="text-secondary">
     {{ order.box_type }} · {{ order.quantity }} dona
     {% if order.box_code in ['OFFSET', 'MICRO'] %} · {{ finishing_label }}{% endif %}
     · xomashyo {{ 'bor' if order.material_in_stock else 'yoʻq' }}
   </div>
 </div>
+
+{% if not order.material_in_stock %}
+<div class="card mb-3 {% if not order.material_received_at %}border-warning{% endif %}">
+  <div class="card-body">
+    {% if order.material_received_at %}
+      <strong>Xomashyo keldi:</strong> {{ order.material_received_at.strftime('%d.%m.%Y %H:%M') }}
+    {% else %}
+      <form method="post" action="{{ url_for('main.material_arrived', order_id=order.order_id) }}"
+            class="row g-2 align-items-end">
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold" for="material_received_at">Xomashyo qachon keldi?</label>
+          <input id="material_received_at" name="material_received_at" type="datetime-local"
+                 class="form-control form-control-lg" required value="{{ now_str }}">
+        </div>
+        <div class="col-12 col-md-6">
+          <button class="btn btn-warning btn-tap w-100 fw-semibold">Xomashyo keldi</button>
+        </div>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 
 {% if order.completed_at %}
 <div class="alert alert-success d-flex flex-wrap justify-content-between align-items-center gap-2">
@@ -42,15 +67,15 @@
             </div>
           </div>
           {% if s.finished_at %}
-            <a class="btn btn-sm btn-link" href="{{ url_for('main.edit_stage_event', stage_event_id=s.stage_event_id) }}">Tahrirlash</a>
+            <a class="btn btn-outline-secondary" href="{{ url_for('main.edit_stage_event', stage_event_id=s.stage_event_id) }}">Tahrirlash</a>
           {% elif running %}
             <a class="btn btn-dark btn-tap px-4" href="{{ url_for('main.finish_stage', order_id=order.order_id, stage_id=s.stage_id) }}">Tugatish</a>
           {% elif not order.completed_at %}
-            <div class="d-flex flex-column align-items-end gap-1">
+            <div class="d-flex flex-column align-items-stretch gap-2">
               <form method="post" action="{{ url_for('main.start_stage', order_id=order.order_id, stage_id=s.stage_id) }}">
                 <button class="btn btn-primary btn-tap px-4">Boshlash</button>
               </form>
-              <a class="small" href="{{ url_for('main.start_stage', order_id=order.order_id, stage_id=s.stage_id) }}">boshqa vaqt</a>
+              <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('main.start_stage', order_id=order.order_id, stage_id=s.stage_id) }}">Boshqa vaqt</a>
             </div>
           {% endif %}
         </div>

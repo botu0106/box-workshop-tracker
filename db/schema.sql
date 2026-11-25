@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS orders (
     received_at            TIMESTAMPTZ NOT NULL,
     promised_date          DATE,
     material_in_stock      BOOLEAN NOT NULL,
+    material_received_at   TIMESTAMPTZ,
     finishing              TEXT NOT NULL DEFAULT 'none'
                            CHECK (finishing IN ('none', 'laminate', 'lacquer')),
     open_orders_at_receipt INT NOT NULL CHECK (open_orders_at_receipt >= 0),
@@ -70,6 +71,9 @@ CREATE TABLE IF NOT EXISTS orders (
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS completed_by TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS finishing TEXT NOT NULL DEFAULT 'none'
     CHECK (finishing IN ('none', 'laminate', 'lacquer'));
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS updated_by TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS material_received_at TIMESTAMPTZ;
 
 -- Production stage events
 CREATE TABLE IF NOT EXISTS stage_events (

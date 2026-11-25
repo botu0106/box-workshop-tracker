@@ -6,6 +6,7 @@
 {% endmacro %}
 
 {% block content %}
+<a class="btn btn-outline-secondary mb-3" href="{{ url_for('main.order_detail', order_id=stage.order_id) }}">← Buyurtmaga qaytish</a>
 <h1 class="h3 mb-1">Bosqichni tahrirlash: {{ stage.stage_name }}</h1>
 <p class="text-muted mb-3">
   Buyurtma {{ stage.order_code }} · dastlab kiritgan: {{ stage.entered_by }},

@@ -104,12 +104,33 @@ def validate_order(form, valid_box_type_ids, finishing_box_type_ids=frozenset(),
         errors["material_in_stock"] = "Xomashyo omborda bor-yoʻqligini belgilang."
     data["material_in_stock"] = stock == "yes"
 
+    # Arrival of missing material: optional, only when it was not in stock
+    data["material_received_at"] = None
+    if stock == "no" and form.get("material_received_at") and received_at:
+        arrived, error = validate_material_arrival(form, received_at, now)
+        if error:
+            errors["material_received_at"] = error
+        data["material_received_at"] = arrived
+
     entered_by = (form.get("entered_by") or "").strip()
     if not entered_by:
         errors["entered_by"] = "Kiritgan shaxs koʻrsatilmagan."
     data["entered_by"] = entered_by
 
     return data, errors
+
+
+def validate_material_arrival(form, received_at, now=None):
+    """Check when missing material arrived. Returns (material_received_at, error)."""
+    now = now or local_now()
+    arrived = _parse_datetime(form.get("material_received_at"))
+    if arrived is None:
+        return None, "Xomashyo kelgan sana va vaqtni toʻgʻri kiriting."
+    if arrived > now + timedelta(minutes=5):
+        return None, "Xomashyo kelgan vaqt kelajakda boʻlishi mumkin emas."
+    if arrived < received_at:
+        return None, "Xomashyo buyurtma qabul qilinishidan oldin kelgan boʻlishi mumkin emas."
+    return arrived, None
 
 
 def validate_stage_start(form, received_at, now=None):

@@ -8,6 +8,7 @@ from .db import get_db
 from .validation import (
     local_now, to_local,
     validate_order, validate_stage_event, validate_stage_start, validate_stage_finish,
+    validate_material_arrival,
 )
 
 bp = Blueprint("main", __name__)
@@ -195,12 +196,13 @@ def new_order():
                         """
                         INSERT INTO orders (
                             order_code, box_type_id, quantity, received_at,
-                            promised_date, material_in_stock, finishing,
+                            promised_date, material_in_stock, material_received_at, finishing,
                             open_orders_at_receipt, entered_by, source
                         )
                         VALUES (
                             %(order_code)s, %(box_type_id)s, %(quantity)s, %(received_at)s,
-                            %(promised_date)s, %(material_in_stock)s, %(finishing)s,
+                            %(promised_date)s, %(material_in_stock)s, %(material_received_at)s,
+                            %(finishing)s,
                             (SELECT COUNT(*) FROM orders
                              WHERE received_at <= %(received_at)s
                                AND (completed_at IS NULL OR completed_at > %(received_at)s)),
@@ -234,6 +236,121 @@ def order_detail(order_id):
         order=order,
         route=get_route(order),
         finishing_label=FINISHING_LABELS[order["finishing"]],
+        now_str=now_input(),
+    )
+
+
+@bp.route("/orders/<int:order_id>/material", methods=["POST"])
+@login_required
+def material_arrived(order_id):
+    order = get_order(order_id)
+    back = url_for("main.order_detail", order_id=order_id)
+    if order["material_in_stock"] or order["material_received_at"]:
+        flash("Bu buyurtma uchun xomashyo allaqachon belgilangan.", "warning")
+        return redirect(back)
+
+    arrived, error = validate_material_arrival(request.form, to_local(order["received_at"]))
+    if error:
+        flash(error, "danger")
+        return redirect(back)
+
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE orders SET material_received_at = %s, updated_by = %s, updated_at = now()
+            WHERE order_id = %s;
+            """,
+            (arrived, g.user["username"], order_id),
+        )
+    conn.commit()
+    flash("Xomashyo kelgani belgilandi.", "success")
+    return redirect(back)
+
+
+@bp.route("/orders/<int:order_id>/edit", methods=["GET", "POST"])
+@login_required
+def edit_order(order_id):
+    order = get_order(order_id)
+    box_types = get_box_types()
+    finishing_ids = {b["box_type_id"] for b in box_types if b["code"] in FINISHING_BOX_TYPES}
+
+    cur = get_db().cursor()
+    cur.execute(
+        "SELECT COUNT(*) AS n, MAX(boxes_completed) AS max_boxes FROM stage_events WHERE order_id = %s;",
+        (order_id,),
+    )
+    recorded = cur.fetchone()
+    # The route depends on box type and finishing, so they are fixed once a stage is recorded
+    route_locked = recorded["n"] > 0
+    errors = {}
+
+    if request.method == "POST":
+        form = form_with_user()
+        if route_locked:
+            form["box_type_id"] = str(order["box_type_id"])
+            form["finishing"] = order["finishing"]
+        data, errors = validate_order(form, {b["box_type_id"] for b in box_types}, finishing_ids)
+
+        if not errors and recorded["max_boxes"] and data["quantity"] < recorded["max_boxes"]:
+            errors["quantity"] = (
+                f"Soni bosqichlarda kiritilgan tayyor qutilardan ({recorded['max_boxes']}) kam boʻlishi mumkin emas."
+            )
+        if not errors and order["completed_at"] and data["received_at"] > to_local(order["completed_at"]):
+            errors["received_at"] = "Qabul qilingan vaqt buyurtma tayyor boʻlgan vaqtdan keyin boʻlishi mumkin emas."
+
+        if not errors:
+            data["order_id"] = order_id
+            conn = get_db()
+            try:
+                with conn.cursor() as cur2:
+                    cur2.execute(
+                        """
+                        UPDATE orders
+                        SET order_code        = %(order_code)s,
+                            box_type_id       = %(box_type_id)s,
+                            quantity          = %(quantity)s,
+                            received_at       = %(received_at)s,
+                            promised_date     = %(promised_date)s,
+                            material_in_stock = %(material_in_stock)s,
+                            material_received_at = %(material_received_at)s,
+                            finishing         = %(finishing)s,
+                            open_orders_at_receipt = (
+                                SELECT COUNT(*) FROM orders o2
+                                WHERE o2.order_id <> %(order_id)s
+                                  AND o2.received_at <= %(received_at)s
+                                  AND (o2.completed_at IS NULL OR o2.completed_at > %(received_at)s)),
+                            updated_by        = %(entered_by)s,
+                            updated_at        = now()
+                        WHERE order_id = %(order_id)s;
+                        """,
+                        data,
+                    )
+                conn.commit()
+                flash("Buyurtma yangilandi.", "success")
+                return redirect(url_for("main.order_detail", order_id=order_id))
+            except psycopg2.errors.UniqueViolation:
+                conn.rollback()
+                errors["order_code"] = "Bunday raqamli buyurtma allaqachon mavjud."
+            except psycopg2.IntegrityError:
+                conn.rollback()
+                flash("Maʼlumotlar bazasi bu oʻzgarishni qabul qilmadi. Qiymatlarni tekshiring.", "danger")
+    else:
+        form = {
+            "order_code": order["order_code"],
+            "box_type_id": str(order["box_type_id"]),
+            "quantity": str(order["quantity"]),
+            "received_at": to_input_datetime(order["received_at"]),
+            "promised_date": order["promised_date"].isoformat() if order["promised_date"] else "",
+            "material_in_stock": "yes" if order["material_in_stock"] else "no",
+            "material_received_at": to_input_datetime(order["material_received_at"]),
+            "finishing": order["finishing"],
+        }
+
+    return render_template(
+        "order_form.html",
+        box_types=box_types, finishing_codes=sorted(FINISHING_BOX_TYPES),
+        errors=errors, form=form, editing=order, route_locked=route_locked,
     )
 
 

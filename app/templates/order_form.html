@@ -1,12 +1,21 @@
 {% extends "base.html" %}
-{% block title %}Yangi buyurtma{% endblock %}
+{% block title %}{% if editing %}Buyurtmani tahrirlash{% else %}Yangi buyurtma{% endif %}{% endblock %}
 
 {% macro err(name) %}
   {% if errors.get(name) %}<div class="text-danger small mt-1">{{ errors[name] }}</div>{% endif %}
 {% endmacro %}
 
 {% block content %}
+{% if editing %}
+<a class="btn btn-outline-secondary mb-3" href="{{ url_for('main.order_detail', order_id=editing.order_id) }}">← Buyurtmaga qaytish</a>
+<h1 class="h4 mb-3">Buyurtmani tahrirlash</h1>
+{% if route_locked %}
+<div class="alert alert-info small">Bosqichlar kiritilgani uchun quti turi va pardozni oʻzgartirib boʻlmaydi.</div>
+{% endif %}
+{% else %}
+<a class="btn btn-outline-secondary mb-3" href="{{ url_for('main.list_orders') }}">← Buyurtmalar</a>
 <h1 class="h4 mb-3">Yangi buyurtma</h1>
+{% endif %}
 <form method="post" class="d-grid gap-4" style="max-width: 640px;">
 
   <div>
@@ -24,6 +33,7 @@
       <div class="col-6">
         <input type="radio" class="btn-check" name="box_type_id" id="bt{{ b.box_type_id }}"
                value="{{ b.box_type_id }}" data-code="{{ b.code }}" required
+               {% if route_locked %}disabled{% endif %}
                {% if form.get('box_type_id') == b.box_type_id|string %}checked{% endif %}>
         <label class="btn btn-outline-primary btn-tap w-100" for="bt{{ b.box_type_id }}">{{ b.name }}</label>
       </div>
@@ -51,7 +61,7 @@
     <div class="row g-2">
       {% for value, label in [('none', 'Yoʻq'), ('laminate', 'Laminatsiya'), ('lacquer', 'Lak')] %}
       <div class="col-4">
-        <input type="radio" class="btn-check" name="finishing" id="fin-{{ value }}" value="{{ value }}"
+        <input type="radio" class="btn-check" name="finishing" id="fin-{{ value }}" value="{{ value }}" {% if route_locked %}disabled{% endif %}
                {% if form.get('finishing', 'none') == value %}checked{% endif %}>
         <label class="btn btn-outline-primary btn-tap w-100" for="fin-{{ value }}">{{ label }}</label>
       </div>
@@ -72,6 +82,12 @@
       {% endfor %}
     </div>
     {{ err('material_in_stock') }}
+    <div id="material-arrival" class="mt-3">
+      <label class="form-label" for="material_received_at">Xomashyo qachon keldi? (hali kelmagan boʻlsa, boʻsh qoldiring)</label>
+      <input id="material_received_at" name="material_received_at" type="datetime-local" class="form-control"
+             value="{{ form.get('material_received_at', '') }}">
+      {{ err('material_received_at') }}
+    </div>
   </fieldset>
 
   <div>
@@ -91,7 +107,7 @@
     </div>
   </details>
 
-  <button class="btn btn-primary btn-lg py-3 fw-semibold">Saqlash</button>
+  <button class="btn btn-primary btn-lg py-3 fw-semibold">{% if editing %}Oʻzgarishlarni saqlash{% else %}Saqlash{% endif %}</button>
 </form>
 {% endblock %}
 
@@ -118,5 +134,17 @@
     input.addEventListener("change", updateFinishing);
   });
   updateFinishing();
+
+  // The material arrival time is asked only when the material was not in stock
+  const arrivalBlock = document.getElementById("material-arrival");
+  function updateArrival() {
+    const noStock = document.getElementById("stock-no").checked;
+    arrivalBlock.hidden = !noStock;
+    if (!noStock) document.getElementById("material_received_at").value = "";
+  }
+  document.querySelectorAll('input[name="material_in_stock"]').forEach(function (input) {
+    input.addEventListener("change", updateArrival);
+  });
+  updateArrival();
 </script>
 {% endblock %}

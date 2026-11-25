@@ -11,7 +11,7 @@
              required value="{{ now_str }}">
     </div>
     <button class="btn btn-primary btn-lg py-3 fw-semibold">Boshlash</button>
-    <a class="btn btn-link" href="{{ url_for('main.order_detail', order_id=order.order_id) }}">Bekor qilish</a>
+    <a class="btn btn-outline-secondary btn-lg" href="{{ url_for('main.order_detail', order_id=order.order_id) }}">Bekor qilish</a>
   </form>
 </div>
 {% endblock %}
