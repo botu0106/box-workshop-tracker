@@ -49,6 +49,9 @@ def create_app(test_config=None):
     from . import api
     app.register_blueprint(api.bp)
 
+    from . import dashboard
+    app.register_blueprint(dashboard.bp)
+
     from . import security
     security.init_app(app)
 

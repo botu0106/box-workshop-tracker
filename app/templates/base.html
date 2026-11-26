@@ -16,6 +16,7 @@
       <a class="navbar-brand fw-bold" href="{{ url_for('main.list_orders') }}">Quti hisobi</a>
       {% if g.user %}
       <div class="d-flex gap-2 align-items-center">
+        <a class="btn btn-outline-light btn-sm" href="{{ url_for('dashboard.show') }}">Hisobot</a>
         {% if g.user.role == 'owner' %}
           <a class="btn btn-outline-light btn-sm" href="{{ url_for('auth.list_users') }}">Foydalanuvchilar</a>
         {% endif %}
