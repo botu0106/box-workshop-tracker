@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Foydalanuvchilar{% endblock %}
+{% block content %}
+<a class="btn btn-outline-secondary mb-3" href="{{ url_for('main.list_orders') }}">← Buyurtmalar</a>
+<h1 class="h4 mb-3">Foydalanuvchilar</h1>
+<div class="list-group">
+  {% for u in users %}
+  <div class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
+    <div>
+      <div class="fw-semibold">{{ u.username }}</div>
+      <div class="small text-secondary">
+        {{ 'Egasi' if u.role == 'owner' else 'Boshqaruvchi' }} ·
+        {% if u.active %}faol{% else %}<span class="text-warning-emphasis">tasdiqlanmagan / bloklangan</span>{% endif %}
+      </div>
+    </div>
+    {% if u.user_id != g.user.user_id %}
+    <form method="post" action="{{ url_for('auth.update_user', user_id=u.user_id) }}" class="d-flex flex-wrap gap-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if u.active %}
+        <button class="btn btn-outline-danger" name="action" value="block">Bloklash</button>
+      {% else %}
+        <button class="btn btn-success" name="action" value="approve">Tasdiqlash</button>
+      {% endif %}
+      {% if u.role == 'owner' %}
+        <button class="btn btn-outline-secondary" name="action" value="make_manager">Boshqaruvchi qilish</button>
+      {% else %}
+        <button class="btn btn-outline-secondary" name="action" value="make_owner">Egasi qilish</button>
+      {% endif %}
+    </form>
+    {% else %}
+      <span class="badge text-bg-secondary">Siz</span>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -13,12 +13,10 @@ def create_app(test_config=None):
     production = os.getenv("APP_ENV") == "production"
 
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-only-key")
-    app.config["SESSION_COOKIE_HTTPONLY"] = True     # JavaScript cannot read the session cookie
-    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"    # basic protection against cross-site requests
-    app.config["SESSION_COOKIE_SECURE"] = production # in production the cookie is sent only over HTTPS
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = production
 
-    # In the cloud the database comes as one connection string (DATABASE_URL);
-    # locally the separate settings from .env are used.
     database_url = os.getenv("DATABASE_URL")
     if database_url:
         app.config["DB"] = {"dsn": database_url}
@@ -34,8 +32,6 @@ def create_app(test_config=None):
     if production:
         if app.config["SECRET_KEY"] == "dev-only-key":
             raise RuntimeError("SECRET_KEY must be set in production.")
-        # The hosting platform sits in front of the app as a reverse proxy;
-        # this makes Flask trust its information about HTTPS and the client IP.
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
     if test_config:
@@ -49,6 +45,12 @@ def create_app(test_config=None):
 
     from .routes import bp
     app.register_blueprint(bp)
+
+    from . import api
+    app.register_blueprint(api.bp)
+
+    from . import security
+    security.init_app(app)
 
     register_commands(app)
     return app

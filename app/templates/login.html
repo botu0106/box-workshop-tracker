@@ -7,6 +7,7 @@
     <h1 class="h3 mb-3">Kirish</h1>
     {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
     <form method="post" class="d-grid gap-3">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div>
         <label class="form-label">Login</label>
         <input name="username" class="form-control" required autocomplete="username" autofocus>
@@ -23,6 +24,7 @@
         </div>
       </div>
       <button class="btn btn-primary">Kirish</button>
+      <a class="btn btn-outline-secondary" href="{{ url_for('auth.register') }}">Roʻyxatdan oʻtish</a>
     </form>
   </div>
 </div>

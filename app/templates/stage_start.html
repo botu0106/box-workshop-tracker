@@ -5,6 +5,7 @@
   <div class="small text-secondary">Buyurtma № {{ order.order_code }}</div>
   <h1 class="h4 mb-3">{{ stage.name }}: boshlash</h1>
   <form method="post" class="d-grid gap-3">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div>
       <label class="form-label fw-semibold" for="started_at">Qachon boshlandi?</label>
       <input id="started_at" name="started_at" type="datetime-local" class="form-control form-control-lg"

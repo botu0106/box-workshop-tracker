@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Xatolik {{ code }}{% endblock %}
+{% block content %}
+<div class="text-center py-5">
+  <div class="display-5 fw-bold text-secondary">{{ code }}</div>
+  <p class="lead mt-3">{{ message }}</p>
+  <a class="btn btn-primary btn-lg" href="{{ url_for('main.list_orders') }}">Buyurtmalarga qaytish</a>
+</div>
+{% endblock %}

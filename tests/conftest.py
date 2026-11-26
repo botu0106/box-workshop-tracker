@@ -61,7 +61,11 @@ def flask_app(test_db):
         )
     conn.close()
 
-    app = create_app({"TESTING": True, "DB": test_db, "SECRET_KEY": "test"})
+    app = create_app({
+        "TESTING": True, "DB": test_db, "SECRET_KEY": "test",
+        # Most tests post forms directly; CSRF and login throttling get their own tests
+        "CSRF_ENABLED": False, "TESTING_NO_THROTTLE": True,
+    })
     yield app
 
 
@@ -77,6 +81,22 @@ def client(flask_app):
     c = flask_app.test_client()
     response = c.post("/login", data={"username": TEST_USER, "password": TEST_PASSWORD})
     assert response.status_code == 302
+    return c
+
+
+@pytest.fixture()
+def owner_client(flask_app, test_db):
+    """A client logged in as a user with the owner role."""
+    conn = psycopg2.connect(**test_db)
+    conn.autocommit = True
+    with conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO users (username, password_hash, role) VALUES ('boss', %s, 'owner');",
+            (generate_password_hash(TEST_PASSWORD),),
+        )
+    conn.close()
+    c = flask_app.test_client()
+    c.post("/login", data={"username": "boss", "password": TEST_PASSWORD})
     return c
 
 

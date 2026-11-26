@@ -3,8 +3,10 @@ from datetime import timedelta
 import psycopg2
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, g
 
-from .auth import login_required
+from . import services
+from .auth import login_required, owner_required
 from .db import get_db
+from .services import ORDER_SELECT
 from .validation import (
     local_now, to_local,
     validate_order, validate_stage_event, validate_stage_start, validate_stage_finish,
@@ -20,13 +22,6 @@ FINISHING_LABELS = {"none": "Pardozsiz", "laminate": "Laminatsiya", "lacquer": "
 
 # A start or finish recorded this long after it happened counts as a late entry
 LATE_ENTRY = timedelta(minutes=15)
-
-ORDER_SELECT = """
-    SELECT o.*, b.name AS box_type, b.code AS box_code
-    FROM orders o
-    JOIN box_types b ON b.box_type_id = o.box_type_id
-"""
-
 
 # ---------- Helpers ----------
 
@@ -97,22 +92,9 @@ def single_machine_for(stage_id):
     return machines[0] if len(machines) == 1 else None
 
 
-def complete_if_all_finished(conn, order):
-    """Mark the order completed when every stage of its route is finished."""
-    route = get_route(order)
-    if not route or not all(stage["finished_at"] for stage in route):
-        return False
-    last_finish = max(stage["finished_at"] for stage in route)
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            UPDATE orders SET completed_at = %s, completed_by = %s
-            WHERE order_id = %s AND completed_at IS NULL;
-            """,
-            (last_finish, g.user["username"], order["order_id"]),
-        )
-    conn.commit()
-    return True
+def entry_mode_for(event_time, now):
+    """A record made more than LATE_ENTRY after the event counts as entered later."""
+    return "realtime" if now - event_time <= LATE_ENTRY else "end_of_day"
 
 
 def to_input_datetime(value):
@@ -189,35 +171,11 @@ def new_order():
         data, errors = validate_order(form, valid_ids, finishing_ids)
 
         if not errors:
-            conn = get_db()
             try:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        INSERT INTO orders (
-                            order_code, box_type_id, quantity, received_at,
-                            promised_date, material_in_stock, material_received_at, finishing,
-                            open_orders_at_receipt, entered_by, source
-                        )
-                        VALUES (
-                            %(order_code)s, %(box_type_id)s, %(quantity)s, %(received_at)s,
-                            %(promised_date)s, %(material_in_stock)s, %(material_received_at)s,
-                            %(finishing)s,
-                            (SELECT COUNT(*) FROM orders
-                             WHERE received_at <= %(received_at)s
-                               AND (completed_at IS NULL OR completed_at > %(received_at)s)),
-                            %(entered_by)s, 'web_form'
-                        )
-                        RETURNING order_id;
-                        """,
-                        data,
-                    )
-                    new_id = cur.fetchone()["order_id"]
-                conn.commit()
+                new_id = services.create_order(data, source="web_form")
                 flash(f"№ {data['order_code']} buyurtma saqlandi.", "success")
                 return redirect(url_for("main.order_detail", order_id=new_id))
             except psycopg2.errors.UniqueViolation:
-                conn.rollback()
                 errors["order_code"] = "Bunday raqamli buyurtma allaqachon mavjud."
 
     finishing_codes = sorted(FINISHING_BOX_TYPES)
@@ -300,40 +258,13 @@ def edit_order(order_id):
             errors["received_at"] = "Qabul qilingan vaqt buyurtma tayyor boʻlgan vaqtdan keyin boʻlishi mumkin emas."
 
         if not errors:
-            data["order_id"] = order_id
-            conn = get_db()
             try:
-                with conn.cursor() as cur2:
-                    cur2.execute(
-                        """
-                        UPDATE orders
-                        SET order_code        = %(order_code)s,
-                            box_type_id       = %(box_type_id)s,
-                            quantity          = %(quantity)s,
-                            received_at       = %(received_at)s,
-                            promised_date     = %(promised_date)s,
-                            material_in_stock = %(material_in_stock)s,
-                            material_received_at = %(material_received_at)s,
-                            finishing         = %(finishing)s,
-                            open_orders_at_receipt = (
-                                SELECT COUNT(*) FROM orders o2
-                                WHERE o2.order_id <> %(order_id)s
-                                  AND o2.received_at <= %(received_at)s
-                                  AND (o2.completed_at IS NULL OR o2.completed_at > %(received_at)s)),
-                            updated_by        = %(entered_by)s,
-                            updated_at        = now()
-                        WHERE order_id = %(order_id)s;
-                        """,
-                        data,
-                    )
-                conn.commit()
+                services.update_order(order_id, data)
                 flash("Buyurtma yangilandi.", "success")
                 return redirect(url_for("main.order_detail", order_id=order_id))
             except psycopg2.errors.UniqueViolation:
-                conn.rollback()
                 errors["order_code"] = "Bunday raqamli buyurtma allaqachon mavjud."
             except psycopg2.IntegrityError:
-                conn.rollback()
                 flash("Maʼlumotlar bazasi bu oʻzgarishni qabul qilmadi. Qiymatlarni tekshiring.", "danger")
     else:
         form = {
@@ -352,6 +283,25 @@ def edit_order(order_id):
         box_types=box_types, finishing_codes=sorted(FINISHING_BOX_TYPES),
         errors=errors, form=form, editing=order, route_locked=route_locked,
     )
+
+
+@bp.route("/orders/<int:order_id>/delete", methods=["POST"])
+@owner_required
+def delete_order(order_id):
+    order = get_order(order_id)
+    services.delete_order(order_id)
+    flash(f"№ {order['order_code']} buyurtma oʻchirildi.", "success")
+    return redirect(url_for("main.list_orders"))
+
+
+@bp.route("/stages/<int:stage_event_id>/delete", methods=["POST"])
+@login_required
+def delete_stage_event(stage_event_id):
+    order_id = services.delete_stage_event(stage_event_id)
+    if order_id is None:
+        abort(404)
+    flash("Bosqich yozuvi oʻchirildi.", "success")
+    return redirect(url_for("main.order_detail", order_id=order_id))
 
 
 @bp.route("/orders/<int:order_id>/reopen", methods=["POST"])
@@ -396,25 +346,12 @@ def start_stage(order_id, stage_id):
         flash(error, "danger")
         return redirect(back)
 
-    conn = get_db()
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO stage_events (
-                    order_id, stage_id, machine_id, started_at, entry_mode, entered_by, source
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, 'web_form');
-                """,
-                (
-                    order_id, stage_id, single_machine_for(stage_id), started_at,
-                    "realtime" if now - started_at <= LATE_ENTRY else "end_of_day",
-                    g.user["username"],
-                ),
-            )
-        conn.commit()
+        services.start_stage(
+            order_id, stage_id, single_machine_for(stage_id), started_at,
+            entry_mode_for(started_at, now), g.user["username"], source="web_form",
+        )
     except psycopg2.errors.UniqueViolation:
-        conn.rollback()
         flash("Bu bosqich allaqachon boshlangan.", "warning")
     return redirect(back)
 
@@ -439,24 +376,8 @@ def finish_stage(order_id, stage_id):
         data, errors = validate_stage_finish(form, to_local(stage["started_at"]), order["quantity"], now)
 
         if not errors:
-            data["late"] = now - data["finished_at"] > LATE_ENTRY
-            data["stage_event_id"] = stage["stage_event_id"]
-            conn = get_db()
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    UPDATE stage_events
-                    SET finished_at     = %(finished_at)s,
-                        boxes_completed = %(boxes_completed)s,
-                        boxes_defective = %(boxes_defective)s,
-                        operators       = %(operators)s,
-                        entry_mode      = CASE WHEN %(late)s THEN 'end_of_day' ELSE entry_mode END
-                    WHERE stage_event_id = %(stage_event_id)s;
-                    """,
-                    data,
-                )
-            conn.commit()
-            if complete_if_all_finished(conn, order):
+            services.finish_stage(stage["stage_event_id"], data, late=now - data["finished_at"] > LATE_ENTRY)
+            if services.complete_if_all_finished(order, get_route(order), g.user["username"]):
                 flash(f"Barcha bosqichlar tugadi. № {order['order_code']} buyurtma tayyor!", "success")
             else:
                 flash(f"{stage['name']}: tugatildi.", "success")

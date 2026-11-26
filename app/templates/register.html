@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Roʻyxatdan oʻtish{% endblock %}
+
+{% macro err(name) %}
+  {% if errors.get(name) %}<div class="text-danger small mt-1">{{ errors[name] }}</div>{% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-sm-8 col-md-5">
+    <h1 class="h3 mb-2">Roʻyxatdan oʻtish</h1>
+    <p class="text-secondary small">Hisob sex egasi tasdiqlagandan keyin ishlaydi.</p>
+    <form method="post" class="d-grid gap-3" novalidate id="register-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div>
+        <label class="form-label" for="username">Login</label>
+        <input id="username" name="username" class="form-control" required minlength="3" maxlength="30"
+               pattern="[A-Za-z0-9_]+" autocomplete="username" value="{{ form.get('username', '') }}">
+        <div class="form-text">3–30 ta lotin harfi, raqam yoki _</div>
+        {{ err('username') }}
+      </div>
+      <div>
+        <label class="form-label" for="password">Parol</label>
+        <input id="password" name="password" type="password" class="form-control" required minlength="8"
+               autocomplete="new-password">
+        {{ err('password') }}
+      </div>
+      <div>
+        <label class="form-label" for="password_confirm">Parolni takrorlang</label>
+        <input id="password_confirm" name="password_confirm" type="password" class="form-control" required
+               autocomplete="new-password">
+        <div class="text-danger small mt-1" id="confirm-error" hidden>Parollar bir xil emas.</div>
+        {{ err('password_confirm') }}
+      </div>
+      <button class="btn btn-primary">Soʻrov yuborish</button>
+      <a class="btn btn-outline-secondary" href="{{ url_for('auth.login') }}">Kirish sahifasiga qaytish</a>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Client-side check before sending; the server checks the same rules again
+  const form = document.getElementById("register-form");
+  const password = document.getElementById("password");
+  const confirmField = document.getElementById("password_confirm");
+  const confirmError = document.getElementById("confirm-error");
+  form.addEventListener("submit", function (event) {
+    const mismatch = password.value !== confirmField.value;
+    confirmError.hidden = !mismatch;
+    if (mismatch || !form.checkValidity()) {
+      event.preventDefault();
+      form.classList.add("was-validated");
+    }
+  });
+</script>
+{% endblock %}
